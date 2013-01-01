@@ -5,7 +5,7 @@
   http://yabfog.com
 
 **********************************************************************/
-
+/*jshint sub:true, laxcomma:true */
 /**
  * Module dependencies.
  */
@@ -15,12 +15,11 @@ var sax = require('sax')
   , url = require('url')
   , util = require('util')
   , events = require('events')
-  , utils = require('./utils')
-  , getValue = utils.getValue;
+  , utils = require('./utils');
 
 function handleMeta (node){
   if (!node) return {};
-  
+
   var meta = {};
   // Set all the meta keys to null
   ['title', 'dateCreated', 'dateModified', 'ownerName', 'ownerEmail', 'ownerEmail', 'docs', 'expansionState', 'vertScrollState', 'windowTop', 'windowLeft', 'windowBottom', 'windowRight'].forEach(function (property){
@@ -31,40 +30,40 @@ function handleMeta (node){
     var el = node[name];
     switch(name){
     case('title'):
-      meta.title = getValue(el);
+      meta.title = utils.get(el);
       break;
     case('datecreated'):
-      meta.dateCreated = getValue(el) ? new Date(el['#']) : null;
+      meta.dateCreated = utils.get(el) ? new Date(el['#']) : null;
       break;
     case('datemodified'):
-      meta.dateModified = getValue(el) ? new Date(el['#']) : null;
+      meta.dateModified = utils.get(el) ? new Date(el['#']) : null;
       break;
     case('ownername'):
-      meta.ownerName = getValue(el);
+      meta.ownerName = utils.get(el);
       break;
     case('ownerid'):
-      meta.ownerId = getValue(el);
+      meta.ownerId = utils.get(el);
       break;
     case('docs'):
-      meta.docs = getValue(el);
+      meta.docs = utils.get(el);
       break;
     case('expansionstate'):
-      meta.expansionState = getValue(el);
+      meta.expansionState = utils.get(el);
       break;
     case('vertscrollstate'):
-      meta.vertScrollState = getValue(el);
+      meta.vertScrollState = utils.get(el);
       break;
     case('windowtop'):
-      meta.windowTop = getValue(el);
+      meta.windowTop = utils.get(el);
       break;
     case('windowleft'):
-      meta.windowLeft = getValue(el);
+      meta.windowLeft = utils.get(el);
       break;
     case('windowbottom'):
-      meta.windowBottom = getValue(el);
+      meta.windowBottom = utils.get(el);
       break;
     case('windowright'):
-      meta.windowRight = getValue(el);
+      meta.windowRight = utils.get(el);
       break;
     }
     // Fill with all native other namespaced properties
@@ -75,16 +74,16 @@ function handleMeta (node){
 
 function getFolderName (node){
   if (!node) return '';
-  
-  if (getValue(node, '#name') == 'outline' && getValue(node, '@') && getValue(node['@'], 'text'))
-    return getValue(node['@'], 'text');
+
+  if (utils.get(node, '#name') == 'outline' && utils.get(node, '@') && utils.get(node['@'], 'text'))
+    return utils.get(node['@'], 'text');
   else
     return '';
 }
 
 function getCategories (node){
-  if (!node || !'category' in node) return [];
-  else return getValue(node, 'category').split(',').map(function (cat){ return cat.trim(); });
+  if (!node || !('category' in node)) return [];
+  else return utils.get(node, 'category').split(',').map(function (cat){ return cat.trim(); });
 }
 
 /**
@@ -96,12 +95,12 @@ function OpmlParser () {
   var self = this;
   self._reset();
   self.stream = sax.createStream(false, {lowercasetags: true}); // https://github.com/isaacs/sax-js
-  self.stream.on('error', function (e){ self.handleSaxError(e, self) });
-  self.stream.on('opentag', function (n){ self.handleOpenTag(n, self) });
-  self.stream.on('closetag', function (el){ self.handleCloseTag(el, self) });
-  self.stream.on('text', function (text){ self.handleText(text, self) });
-  self.stream.on('cdata', function (text){ self.handleText(text, self) });
-  self.stream.on('end', function (){ self.handleEnd(self) });
+  self.stream.on('error', function (e){ self.handleSaxError(e, self); });
+  self.stream.on('opentag', function (n){ self.handleOpenTag(n, self); });
+  self.stream.on('closetag', function (el){ self.handleCloseTag(el, self); });
+  self.stream.on('text', function (text){ self.handleText(text, self); });
+  self.stream.on('cdata', function (text){ self.handleText(text, self); });
+  self.stream.on('end', function (){ self.handleEnd(self); });
   events.EventEmitter.call(this);
 }
 
@@ -110,7 +109,7 @@ util.inherits(OpmlParser, events.EventEmitter);
 /**
  * Parses opml contained in a string.
  *
- * For each feed, emits a 'feed' event 
+ * For each feed, emits a 'feed' event
  * with an object containing the keys corresponding to the attributes that are present (or null)
  * (keep in mind that no validation is done, so other arbitrary (and invalid) attributes
  * may also be present):
@@ -180,7 +179,7 @@ OpmlParser.prototype.parseFile = function(file, callback) {
 /**
  * Parses OPML from a url.
  *
- * Please consider whether it would be better to perform conditional GETs 
+ * Please consider whether it would be better to perform conditional GETs
  * and pass in the results instead.
  *
  * See parseString for more info.
@@ -282,19 +281,19 @@ OpmlParser.prototype.handleOpenTag = function (node, scope){
       attrs[name] = attrs[name].trim();
     });
     return attrs;
-  };
+  }
 
   if (Object.keys(node.attributes).length) {
     n['@'] = handleAttributes(node.attributes, n['#name']);
   }
 
-  if (self.stack.length == 0 && n['#name'] == 'opml') {
+  if (self.stack.length === 0 && n['#name'] == 'opml') {
     self.meta['#ns'] = [];
     self.meta['@'] = [];
     Object.keys(n['@']).forEach(function(name) {
       var o = {};
       o[name] = n['@'][name];
-      if (name.indexOf('xmlns') == 0) {
+      if (name.indexOf('xmlns') === 0) {
         self.meta['#ns'].push(o);
       } else if (name != 'version') {
         self.meta['@'].push(o);
@@ -324,10 +323,10 @@ OpmlParser.prototype.handleCloseTag = function (el, scope){
       }
     }
   }
-  
+
   if (el == 'outline') { // We have an outline node
     if (!self.meta.title) { // We haven't yet parsed all the metadata
-      Object.merge(self.meta, handleMeta(self.stack[1].head), true);
+      utils.merge(self.meta, handleMeta(self.stack[1].head), true);
       self.emit('meta', self.meta);
     }
     // These three lines reassign attributes to properties of the outline object and
@@ -345,7 +344,7 @@ OpmlParser.prototype.handleCloseTag = function (el, scope){
       self.feeds.push(feed);
     }
   } else if (el == 'head' && !self.meta.title) { // We haven't yet parsed all the metadata
-    Object.merge(self.meta, handleMeta(n), true);
+    utils.merge(self.meta, handleMeta(n), true);
     self.emit('meta', self.meta);
   }
 
@@ -384,10 +383,10 @@ OpmlParser.prototype._reset = function () {
   this.xmlbase = [];
   this.errors = [];
   this.callback = undefined;
-}
+};
 
 OpmlParser.prototype._setCallback = function (callback){
   this.callback = ('function' == typeof callback) ? callback : undefined;
-}
+};
 
 exports = module.exports = OpmlParser;
