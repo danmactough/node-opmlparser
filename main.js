@@ -336,7 +336,7 @@ OpmlParser.prototype.handleCloseTag = function (el, scope){
     if ('category' in n) n['categories'] = getCategories(n);
     if (children) n.outline = children;
 
-    if ('xmlUrl' in n) { // a feed is found
+    if ('xmlurl' in n) { // a feed is found
       var feed = n;
       feed.folder = getFolderName(self.stack[0]);
       feed.meta = self.meta;
