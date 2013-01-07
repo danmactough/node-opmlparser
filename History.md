@@ -1,4 +1,9 @@
 
+v0.4.1 / 2013-01-07
+==================
+
+  * Fix typo: no camelCase when using sax lowercasetags option
+
 v0.4.0 / 2012-12-31
 ==================
 
