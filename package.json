@@ -2,7 +2,7 @@
   "name": "opmlparser",
   "author": "Dan MacTough <danmactough@gmail.com>",
   "description": "OPML parsing using sax js",
-  "version": "0.4.1",
+  "version": "0.4.2-alpha",
   "homepage": "http://github.com/danmactough/node-opmlparser",
   "repository": {
     "type": "git",
