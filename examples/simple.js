@@ -4,7 +4,7 @@
  * MIT Licensed
  */
 
-var OpmlParser = require('../lib/opmlparser')
+var OpmlParser = require('../')
   , parser
 
 parser = new OpmlParser();
