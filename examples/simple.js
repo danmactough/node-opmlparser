@@ -13,7 +13,7 @@ parser.on('meta', function (meta){
   console.log('This OPML is entitled: "%s"', meta.title);
 });
 parser.on('feed', function (feed){
-  console.log('Got feed: "%s" <%s>', feed.title, feed.xmlUrl);
+  console.log('Got feed: "%s" <%s>', feed.title, feed.xmlurl);
 });
 
 parser.parseFile('http://hosting.opml.org/dave/spec/subscriptionList.opml');
