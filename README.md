@@ -73,7 +73,7 @@ called with four parameters: error, meta, feeds, and outline.
         console.log('%s - %s - %s', meta.title, meta.dateCreated, meta.ownerName);
         console.log('Feeds');
         feeds.forEach(function (feed){
-          console.log('%s - %s (%s)', feed.title, feed.htmlUrl, feed.xmlUrl);
+          console.log('%s - %s (%s)', feed.title, feed.htmlurl, feed.xmlurl);
         });
       }
     }
