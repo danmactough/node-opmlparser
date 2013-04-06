@@ -22,4 +22,13 @@ describe('basic', function () {
       done();
     });
   });
+
+  it('can parse an outline\'s categories', function (done) {
+    var data = require('fs').readFileSync(__dirname + '/opml/categories.opml', 'utf8');
+    opmlparser.parseString(data, function (err, meta, feeds, outline) {
+      assert.ifError(err);
+      assert.equal(outline[0].categories.length, 2);
+      done();
+    });
+  });
 });
