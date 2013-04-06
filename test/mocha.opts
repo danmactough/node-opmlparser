@@ -1,0 +1,4 @@
+--require test/common.js
+--globals server,assert,OpmlParser
+--reporter spec
+--timeout 5s

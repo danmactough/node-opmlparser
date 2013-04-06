@@ -2,7 +2,7 @@
   "name": "opmlparser",
   "author": "Dan MacTough <danmactough@gmail.com>",
   "description": "OPML parsing using sax js",
-  "version": "0.4.2-alpha",
+  "version": "0.5.0-alpha",
   "homepage": "http://github.com/danmactough/node-opmlparser",
   "repository": {
     "type": "git",
@@ -11,14 +11,25 @@
   "bugs": {
     "url": "http://github.com/danmactough/node-opmlparser/issues"
   },
-  "keywords": ["opml", "feed", "outline", "xml", "syndication"],
+  "keywords": [
+    "opml",
+    "feed",
+    "outline",
+    "xml",
+    "syndication"
+  ],
   "main": "./main.js",
   "engines": {
-    "node": ">= 0.4.0"
+    "node": ">= 0.8.0"
   },
   "dependencies": {
     "sax": "0.5.x",
     "request": "2.9.x"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "mocha": "~1.9.0"
+  },
+  "scripts": {
+    "test": "make test"
+  }
 }
