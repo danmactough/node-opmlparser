@@ -17,75 +17,6 @@ var sax = require('sax')
   , events = require('events')
   , utils = require('./utils');
 
-function handleMeta (node){
-  if (!node) return {};
-
-  var meta = {};
-  // Set all the meta keys to null
-  ['title', 'dateCreated', 'dateModified', 'ownerName', 'ownerEmail', 'ownerEmail', 'docs', 'expansionState', 'vertScrollState', 'windowTop', 'windowLeft', 'windowBottom', 'windowRight'].forEach(function (property){
-    meta[property] = null;
-  });
-
-  Object.keys(node).forEach(function(name){
-    var el = node[name];
-    switch(name){
-    case('title'):
-      meta.title = utils.get(el);
-      break;
-    case('datecreated'):
-      meta.dateCreated = utils.get(el) ? new Date(el['#']) : null;
-      break;
-    case('datemodified'):
-      meta.dateModified = utils.get(el) ? new Date(el['#']) : null;
-      break;
-    case('ownername'):
-      meta.ownerName = utils.get(el);
-      break;
-    case('ownerid'):
-      meta.ownerId = utils.get(el);
-      break;
-    case('docs'):
-      meta.docs = utils.get(el);
-      break;
-    case('expansionstate'):
-      meta.expansionState = utils.get(el);
-      break;
-    case('vertscrollstate'):
-      meta.vertScrollState = utils.get(el);
-      break;
-    case('windowtop'):
-      meta.windowTop = utils.get(el);
-      break;
-    case('windowleft'):
-      meta.windowLeft = utils.get(el);
-      break;
-    case('windowbottom'):
-      meta.windowBottom = utils.get(el);
-      break;
-    case('windowright'):
-      meta.windowRight = utils.get(el);
-      break;
-    }
-    // Fill with all native other namespaced properties
-    if (name.indexOf('#') !== 0 && ~name.indexOf(':')) meta[name] = el;
-  });
-  return meta;
-}
-
-function getFolderName (node){
-  if (!node) return '';
-
-  if (utils.get(node, '#name') == 'outline' && utils.get(node, '@') && utils.get(node['@'], 'text'))
-    return utils.get(node['@'], 'text');
-  else
-    return '';
-}
-
-function getCategories (node){
-  if (!node || !('category' in node)) return [];
-  else return utils.get(node, 'category').split(',').map(function (cat){ return cat.trim(); });
-}
-
 /**
  * OpmlParser constructor. Most apps will only use one instance.
  *
@@ -105,121 +36,6 @@ function OpmlParser () {
 }
 
 util.inherits(OpmlParser, events.EventEmitter);
-
-/**
- * Parses opml contained in a string.
- *
- * For each feed, emits a 'feed' event
- * with an object containing the keys corresponding to the attributes that are present (or null)
- * (keep in mind that no validation is done, so other arbitrary (and invalid) attributes
- * may also be present):
- *   title {String}
- *   text {String}
- *   xmlUrl {String}
- *   htmlUrl {String}
- *   description {String}
- *   type {String}
- *   language {Object}
- *   version {Object}
- *   Object.keys(meta): (any of which may be null)
- *     #ns {Array} key,value pairs of each namespace declared for the OPML
- *     @ {Array} key,value pairs of each attribute set in the root <opml> element
- *     #version {String}
- *     title {String}
- *     dateCreated {Date}
- *     dateModified {Date}
- *     ownerName {String}
- *     ownerId {String}
- *     docs {String}
- *     expansionState {String}
- *     vertScrollState {String}
- *     windowTop {String}
- *     windowLeft {String}
- *     windowBottom {String}
- *     windowRight {String}
- *
- * Emits a 'warning' event on each XML parser warning
- *
- * Emits an 'error' event on each XML parser error
- *
- * @param {String} string of OPML
- * @param {Function} callback
- * @api public
- */
-
-OpmlParser.prototype.parseString = function(string, callback) {
-  var self = this;
-  self._setCallback(callback);
-  self.stream
-    .on('error', function (e){ self.handleError(e, self); })
-    .end(string, 'utf8');
-};
-
-/**
- * Parses OPML from a file or (for compatability with libxml) a url.
- * See parseString for more info.
- *
- * @param {String} path to the OPML file or a fully qualified uri or parsed url object from url.parse()
- * @param {Function} callback
- * @api public
- */
-
-OpmlParser.prototype.parseFile = function(file, callback) {
-  var self = this;
-  if (/^https?:/.test(file) || (typeof file == 'object' && 'protocol' in file)) {
-    self.parseUrl(file, callback);
-  } else {
-    self._setCallback(callback);
-    fs.createReadStream(file)
-      .on('error', function (e){ self.handleError(e, self); })
-      .pipe(self.stream);
-  }
-};
-
-/**
- * Parses OPML from a url.
- *
- * Please consider whether it would be better to perform conditional GETs
- * and pass in the results instead.
- *
- * See parseString for more info.
- *
- * @param {String} fully qualified uri or a parsed url object from url.parse()
- * @param {Function} callback
- * @api public
- */
-
-OpmlParser.prototype.parseUrl = function(url, callback) {
-  var self = this;
-  self._setCallback(callback);
-  request(url)
-    .on('error', function (e){ self.handleError(e, self); })
-    .pipe(self.stream);
-};
-
-/**
- * Parses a feed from a Stream.
- *
- * Example:
- *    parser = new OpmlParser();
- *    parser.on('feed', function (feed){ // do something });
- *    parser.parseStream(fs.createReadStream('file.opml')[, callback]);
- *
- *
- * See parseString for more info.
- *
- * @param {String} fully qualified uri or a parsed url object from url.parse()
- * @param {Function} callback
- * @api public
- */
-
-OpmlParser.prototype.parseStream = function(stream, callback) {
-  var self = this;
-  self._setCallback(callback);
-  stream
-    .on('error', function (e){ self.handleError(e, self); })
-    .pipe(self.stream);
-};
 
 OpmlParser.prototype.handleEnd = function (scope){
   var self = scope;
@@ -375,6 +191,75 @@ OpmlParser.prototype.handleText = function (text, scope){
   }
 };
 
+function handleMeta (node){
+  if (!node) return {};
+
+  var meta = {};
+  // Set all the meta keys to null
+  ['title', 'dateCreated', 'dateModified', 'ownerName', 'ownerEmail', 'ownerEmail', 'docs', 'expansionState', 'vertScrollState', 'windowTop', 'windowLeft', 'windowBottom', 'windowRight'].forEach(function (property){
+    meta[property] = null;
+  });
+
+  Object.keys(node).forEach(function(name){
+    var el = node[name];
+    switch(name){
+    case('title'):
+      meta.title = utils.get(el);
+      break;
+    case('datecreated'):
+      meta.dateCreated = utils.get(el) ? new Date(el['#']) : null;
+      break;
+    case('datemodified'):
+      meta.dateModified = utils.get(el) ? new Date(el['#']) : null;
+      break;
+    case('ownername'):
+      meta.ownerName = utils.get(el);
+      break;
+    case('ownerid'):
+      meta.ownerId = utils.get(el);
+      break;
+    case('docs'):
+      meta.docs = utils.get(el);
+      break;
+    case('expansionstate'):
+      meta.expansionState = utils.get(el);
+      break;
+    case('vertscrollstate'):
+      meta.vertScrollState = utils.get(el);
+      break;
+    case('windowtop'):
+      meta.windowTop = utils.get(el);
+      break;
+    case('windowleft'):
+      meta.windowLeft = utils.get(el);
+      break;
+    case('windowbottom'):
+      meta.windowBottom = utils.get(el);
+      break;
+    case('windowright'):
+      meta.windowRight = utils.get(el);
+      break;
+    }
+    // Fill with all native other namespaced properties
+    if (name.indexOf('#') !== 0 && ~name.indexOf(':')) meta[name] = el;
+  });
+  return meta;
+}
+
+function getFolderName (node){
+  if (!node) return '';
+
+  if (utils.get(node, '#name') == 'outline' && utils.get(node, '@') && utils.get(node['@'], 'text'))
+    return utils.get(node['@'], 'text');
+  else
+    return '';
+}
+
+function getCategories (node){
+  if (!node || !('category' in node)) return [];
+  else return utils.get(node, 'category').split(',').map(function (cat){ return cat.trim(); });
+}
+
 OpmlParser.prototype._reset = function () {
   this.meta = {};
   this.feeds = [];
@@ -387,6 +272,122 @@ OpmlParser.prototype._reset = function () {
 
 OpmlParser.prototype._setCallback = function (callback){
   this.callback = ('function' == typeof callback) ? callback : undefined;
+};
+
+
+/**
+ * Parses opml contained in a string.
+ *
+ * For each feed, emits a 'feed' event
+ * with an object containing the keys corresponding to the attributes that are present (or null)
+ * (keep in mind that no validation is done, so other arbitrary (and invalid) attributes
+ * may also be present):
+ *   title {String}
+ *   text {String}
+ *   xmlUrl {String}
+ *   htmlUrl {String}
+ *   description {String}
+ *   type {String}
+ *   language {Object}
+ *   version {Object}
+ *   Object.keys(meta): (any of which may be null)
+ *     #ns {Array} key,value pairs of each namespace declared for the OPML
+ *     @ {Array} key,value pairs of each attribute set in the root <opml> element
+ *     #version {String}
+ *     title {String}
+ *     dateCreated {Date}
+ *     dateModified {Date}
+ *     ownerName {String}
+ *     ownerId {String}
+ *     docs {String}
+ *     expansionState {String}
+ *     vertScrollState {String}
+ *     windowTop {String}
+ *     windowLeft {String}
+ *     windowBottom {String}
+ *     windowRight {String}
+ *
+ * Emits a 'warning' event on each XML parser warning
+ *
+ * Emits an 'error' event on each XML parser error
+ *
+ * @param {String} string of OPML
+ * @param {Function} callback
+ * @api public
+ */
+
+OpmlParser.prototype.parseString = function(string, callback) {
+  var self = this;
+  self._setCallback(callback);
+  self.stream
+    .on('error', function (e){ self.handleError(e, self); })
+    .end(string, 'utf8');
+};
+
+/**
+ * Parses OPML from a file or (for compatability with libxml) a url.
+ * See parseString for more info.
+ *
+ * @param {String} path to the OPML file or a fully qualified uri or parsed url object from url.parse()
+ * @param {Function} callback
+ * @api public
+ */
+
+OpmlParser.prototype.parseFile = function(file, callback) {
+  var self = this;
+  if (/^https?:/.test(file) || (typeof file == 'object' && 'protocol' in file)) {
+    self.parseUrl(file, callback);
+  } else {
+    self._setCallback(callback);
+    fs.createReadStream(file)
+      .on('error', function (e){ self.handleError(e, self); })
+      .pipe(self.stream);
+  }
+};
+
+/**
+ * Parses OPML from a url.
+ *
+ * Please consider whether it would be better to perform conditional GETs
+ * and pass in the results instead.
+ *
+ * See parseString for more info.
+ *
+ * @param {String} fully qualified uri or a parsed url object from url.parse()
+ * @param {Function} callback
+ * @api public
+ */
+
+OpmlParser.prototype.parseUrl = function(url, callback) {
+  var self = this;
+  self._setCallback(callback);
+  request(url)
+    .on('error', function (e){ self.handleError(e, self); })
+    .pipe(self.stream);
+};
+
+/**
+ * Parses a feed from a Stream.
+ *
+ * Example:
+ *    parser = new OpmlParser();
+ *    parser.on('feed', function (feed){ // do something });
+ *    parser.parseStream(fs.createReadStream('file.opml')[, callback]);
+ *
+ *
+ * See parseString for more info.
+ *
+ * @param {String} fully qualified uri or a parsed url object from url.parse()
+ * @param {Function} callback
+ * @api public
+ */
+
+OpmlParser.prototype.parseStream = function(stream, callback) {
+  var self = this;
+  self._setCallback(callback);
+  stream
+    .on('error', function (e){ self.handleError(e, self); })
+    .pipe(self.stream);
 };
 
 exports = module.exports = OpmlParser;
