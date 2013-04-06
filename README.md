@@ -1,5 +1,6 @@
-#  Opmlparser - OPML parsing in Node.js 
-      
+[![Build Status](https://secure.travis-ci.org/danmactough/node-opmlparser.png?branch=refactor)](https://travis-ci.org/danmactough/node-opmlparser)
+#  Opmlparser - OPML parsing in Node.js
+
 This module adds methods for OPML parsing in node.js using Isaac Schlueter's [sax](https://github.com/isaacs/sax-js) parser.
 
 ## Requirements
@@ -134,11 +135,11 @@ absent, and other arbitrary (and invalid) properties may be present.
 See the [OPML Spec](http://dev.opml.org/spec2.html) for more info about what to
 expect to see in various kinds of OPML files.
 
-## License 
+## License
 
 (The MIT License)
 
-Copyright (c) 2011 Dan MacTough &lt;danmactough@gmail.com&gt;
+Copyright (c) 2011 Dan MacTough <danmactough@gmail.com>
 
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
