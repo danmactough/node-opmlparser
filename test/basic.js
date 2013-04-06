@@ -1,5 +1,4 @@
 describe('basic', function () {
-  var opmlparser = new OpmlParser();
 
   it('can parse an outline', function (done) {
     var data = require('fs').readFileSync(__dirname + '/opml/outline.opml', 'utf8');
