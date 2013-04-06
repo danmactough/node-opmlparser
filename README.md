@@ -12,78 +12,81 @@ This module adds methods for OPML parsing in node.js using Isaac Schlueter's [sa
 
     npm install opmlparser
 
-## Example
+## Changes since v0.4.x
 
-```javascript
-    var OpmlParser = require('opmlparser')
-      , parser = new OpmlParser();
-      // The following modules are used in the examples below
-      , fs = require('fs')
-      , request = require('request')
-      ;
+- New preferred API -- just `.pipe()` in a [readable stream](http://nodejs.org/api/stream.html#stream_readable_stream).
+- The `end` event passes no arguments; use `complete` if you want `meta`, `feeds`, and `outline`. `end` will be emitted even when there's been a fatal error.
+- All properties are **only lowercase**; no camelCase
+- You no longer create your own Opmlparser instance; just use the methods directly (while they last; they'll likely be gone in the next minor version)
+
+```js
+
+var OpmlParser = require('opmlparser')
+  , request = require('request');
+
+request('http://someopmlurl.opml')
+  .pipe(new OpmlParser([options]))
+  .on('error', function(error) {
+    // always handle errors
+  })
+  .on('meta', function (meta) {
+    // do something
+  })
+  .on('feed', function (feed) {
+    // do something else
+  });
+  .on('outline', function (outline) {
+    // do something else
+  });
+  .on('end', function () {
+   // do the next thing
+  });
 ```
-### Use as an EventEmitter
 
-```javascript
+### options
 
-    parser.on('feed', function(feed){
-        console.log('Got feed: %s', JSON.stringify(feed));
-    });
+- `addmeta` - Set to `false` to override Opmlparser's default behavior, which
+  is to add the OPML's `meta` information to each `feed`.
 
-    // You can give a local file path to parseFile()
-    parser.parseFile('./opml');
+- `opmlurl` - The url (string) of the OPML. Opmlparser is very good at
+  resolving relative urls in OPML files. But OPML files could use relative urls without
+  declaring the `xml:base` attribute any place in the file. This is perfectly
+  valid, but we don't know know the file's url before we start parsing the file
+  and trying to resolve those relative urls. If we discover the file's url, we
+  will go back and resolve the relative urls we've already seen, but this takes
+  a little time (not much). If you want to be sure we never have to re-resolve
+  relative urls (or if Opmlparser is failing to properly resolve relative urls),
+  you should set the `opmlurl` option. Otherwise, feel free to ignore this option.
 
-    // For libxml compatibility, you can also give a URL to parseFile()
-    parser.parseFile('http://hosting.opml.org/dave/spec/subscriptionList.opml');
+## libxml-like Helper Methods (deprecated)
 
-    // Or, you can give that URL to parseUrl()
-    parser.parseUrl('http://hosting.opml.org/dave/spec/subscriptionList.opml');
+### parser.parseString(string, [options], [callback])
 
-    // But you should probably be using conditional GETs and passing the results to
-    // parseString() or piping it right into the stream, if possible
+- `string` - the contents of the file
 
-    var reqObj = {'uri': 'http://hosting.opml.org/dave/spec/subscriptionList.opml',
-                  'If-Modified-Since' : <your cached 'lastModified' value>,
-                  'If-None-Match' : <your cached 'etag' value>};
+### parser.parseFile(filename, [options], [callback])
 
-    // parseString()
-    request(reqObj, function (err, response, body){
-      parser.parseString(body);
-    });
+- `filename` - a local filename or remote url
 
-    // Stream piping -- very sexy
-    request(reqObj).pipe(parser.stream);
+### parser.parseUrl(url, [options], [callback])
 
-    // Using the stream interface with a file (or string)
-    // A good alternative to parseFile() or parseString() when you have a large local file
-    parser.parseStream(fs.createReadStream('./opml'));
-    // Or
-    fs.createReadStream('./opml').pipe(parser.stream);
-```
-### Use with a callback
+The first argument can be either a url or a `request` options object. The only
+required option is uri, all others are optional. See
+[request](https://github.com/mikeal/request#requestoptions-callback) for details
+about what that `request` options object might look like.
 
-When the OPML is finished being parsed, if you provide a callback, it gets
-called with four parameters: error, meta, feeds, and outline.
+- `url` - fully qualified uri or a parsed url object from url.parse()
 
-```javascript
+### parser.parseStream(readableStream, [options], [callback])
 
-    function myCallback (error, meta, feeds, outline){
-      if (error) console.error(error);
-      else {
-        console.log('OPML info');
-        console.log('%s - %s - %s', meta.title, meta.dateCreated, meta.ownerName);
-        console.log('Feeds');
-        feeds.forEach(function (feed){
-          console.log('%s - %s (%s)', feed.title, feed.htmlurl, feed.xmlurl);
-        });
-      }
-    }
+- `readableStream` - a [Readable Stream](http://nodejs.org/api/stream.html#stream_readable_stream)
 
-    parser.parseFile('./opml', myCallback);
+## Examples
 
-    // To use the stream interface with a callback, you *MUST* use parseStream(), not piping
-    parser.parseStream(fs.createReadStream('./opml'), myCallback);
-```
+See the [examples](examples/) directory.
+
+Deprecated libxml-style examples are [here](examples-old.md).
+
 ## What is the parsed output produced by opmlparser?
 
 Opmlparser parses each OPML file into a `meta` portion, a `feeds` portion, and an
@@ -94,7 +97,7 @@ additional metadata, such as OPML version, any namespaces defined, etc.
 
 If the OPML is a subscription list, the `feeds` will contain an array of objects
 representing each feed. If the OPML is not a subscription list, `feeds` will be
-an empty array. When opmlparser is used as an event emitter, each `feed` is
+`null`. When opmlparser is used as an event emitter, each `feed` is
 emitted as a 'feed' event.
 
 The `outline` will simply translate the OPML's `<body>` from XML to a Javascript
@@ -106,17 +109,17 @@ No validation is performed. Each of the meta properties will be defined, but any
 of them may be `null`.
 
 * title
-* dateCreated
-* dateModified
-* ownerName
-* ownerId
+* datecreated
+* datemodified
+* ownername
+* ownerid
 * docs
-* expansionState
-* vertScrollState
-* windowTop
-* windowLeft
-* windowBottom
-* windowRight
+* expansionstate
+* vertscrollstate
+* windowtop
+* windowleft
+* windowbottom
+* windowright
 
 ### List of feed properties
 
@@ -125,8 +128,8 @@ absent, and other arbitrary (and invalid) properties may be present.
 
 * title
 * text
-* xmlUrl
-* htmlUrl
+* xmlurl
+* htmlurl
 * description
 * type
 * language
