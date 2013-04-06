@@ -41,10 +41,7 @@ OpmlParser.prototype.handleEnd = function () {
     , feeds = (this.feeds.length ? this.feeds : null)
     , outline = this.outline;
 
-  this.emit('outline', outline);
-  this.emit('end', meta, feeds, outline);
-
-  if ('function' == typeof this.callback) {
+  if ('function' === typeof this.callback) {
     if (this.errors.length) {
       var error = this.errors.pop();
       if (this.errors.length) {
@@ -52,9 +49,21 @@ OpmlParser.prototype.handleEnd = function () {
       }
       this.callback(error);
     } else {
-      this.callback(null, meta, feeds, outline);
+      this.callback(null,  meta, feeds, outline);
     }
   }
+  if (!this.errors.length) {
+    this.emit('outline', outline);
+    this.emit('complete',  meta, feeds, outline);
+  }
+  this.emit('end');
+  if (this.stream) {
+    this.stream.removeAllListeners('end');
+    this.stream.removeAllListeners('error');
+  }
+  this.stream.on('error', function() {});
+  this.stream._parser.close();
+
   this._reset();
 };
 
