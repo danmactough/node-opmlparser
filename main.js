@@ -207,7 +207,7 @@ OpmlParser.prototype.handleMeta = function (node) {
 
   var meta = {};
   // Set all the meta keys to null
-  ['title', 'dateCreated', 'dateModified', 'ownerName', 'ownerEmail', 'ownerEmail', 'docs', 'expansionState', 'vertScrollState', 'windowTop', 'windowLeft', 'windowBottom', 'windowRight'].forEach(function (property){
+  ['title', 'datecreated', 'datemodified', 'ownername', 'owneremail', 'owneremail', 'docs', 'expansionstate', 'vertscrollstate', 'windowtop', 'windowleft', 'windowbottom', 'windowright'].forEach(function (property){
     meta[property] = null;
   });
 
@@ -218,37 +218,19 @@ OpmlParser.prototype.handleMeta = function (node) {
       meta.title = utils.get(el);
       break;
     case('datecreated'):
-      meta.dateCreated = utils.get(el) ? new Date(el['#']) : null;
-      break;
     case('datemodified'):
-      meta.dateModified = utils.get(el) ? new Date(el['#']) : null;
+      meta[name] = utils.get(el) ? new Date(el['#']) : null;
       break;
     case('ownername'):
-      meta.ownerName = utils.get(el);
-      break;
     case('ownerid'):
-      meta.ownerId = utils.get(el);
-      break;
     case('docs'):
-      meta.docs = utils.get(el);
-      break;
     case('expansionstate'):
-      meta.expansionState = utils.get(el);
-      break;
     case('vertscrollstate'):
-      meta.vertScrollState = utils.get(el);
-      break;
     case('windowtop'):
-      meta.windowTop = utils.get(el);
-      break;
     case('windowleft'):
-      meta.windowLeft = utils.get(el);
-      break;
     case('windowbottom'):
-      meta.windowBottom = utils.get(el);
-      break;
     case('windowright'):
-      meta.windowRight = utils.get(el);
+      meta[name] = utils.get(el);
       break;
     }
     // Fill with all native other namespaced properties
