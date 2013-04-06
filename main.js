@@ -21,10 +21,12 @@ var sax = require('sax')
  *
  * @api public
  */
-function OpmlParser () {
-  this._reset();
+function OpmlParser (options) {
+  if (!(this instanceof OpmlParser)) return new OpmlParser(options);
+  this.init();
+  this.parseOpts(options);
   // See https://github.com/isaacs/sax-js for more info
-  this.stream = sax.createStream(false /* strict mode - no by default */, {lowercase: true, xmlns: false });
+  this.stream = sax.createStream(this.options.strict /* strict mode - no by default */, {lowercase: true, xmlns: false });
   this.stream.on('error', this.handleError.bind(this, this.handleSaxError.bind(this)));
   this.stream.on('opentag', this.handleOpenTag.bind(this));
   this.stream.on('closetag',this.handleCloseTag.bind(this));
@@ -33,8 +35,40 @@ function OpmlParser () {
   this.stream.on('end', this.handleEnd.bind(this));
   EventEmitter.call(this);
 }
-
 util.inherits(OpmlParser, EventEmitter);
+
+/*
+ * Initializes the SAX stream
+ *
+ * Initializes the class-variables
+ */
+OpmlParser.prototype.init = function (){
+  this.meta = {
+    '#ns': []
+  , '@': []
+  };
+  this.feeds = [];
+  this.outline = {};
+  this.stack = [];
+  this.xmlbase = [];
+  this.errors = [];
+  this.silenceErrors = false;
+};
+
+/*
+ * Parse options
+ */
+OpmlParser.prototype.parseOpts = function (options) {
+  this.options = options || {};
+  if (!('strict' in this.options)) this.options.strict = false;
+  if (!('addmeta' in this.options)) this.options.addmeta = true;
+  if ('MAX_BUFFER_LENGTH' in this.options) {
+    sax.MAX_BUFFER_LENGTH = this.options.MAX_BUFFER_LENGTH; // set to Infinity to have unlimited buffers
+  } else {
+    sax.MAX_BUFFER_LENGTH = 16 * 1024 * 1024; // 16M versus the 64K default
+  }
+  if (this.options.opmlurl) this.xmlbase.unshift({ '#name': 'xml', '#': this.options.opmlurl});
+};
 
 OpmlParser.prototype.handleEnd = function () {
   var meta = this.meta
@@ -63,8 +97,6 @@ OpmlParser.prototype.handleEnd = function () {
   }
   this.stream.on('error', function() {});
   this.stream._parser.close();
-
-  this._reset();
 };
 
 OpmlParser.prototype.handleSaxError = function () {
@@ -259,16 +291,6 @@ OpmlParser.prototype.getFolderName = function (node) {
 OpmlParser.prototype.getCategories = function (node) {
   if (!node || !('category' in node)) return [];
   else return utils.unique(utils.get(node, 'category').split(',').map(function (cat){ return cat.trim(); }));
-};
-
-OpmlParser.prototype._reset = function () {
-  this.meta = {};
-  this.feeds = [];
-  this.stack = [];
-  this.outline = {};
-  this.xmlbase = [];
-  this.errors = [];
-  this.callback = undefined;
 };
 
 OpmlParser.prototype._setCallback = function (callback){
