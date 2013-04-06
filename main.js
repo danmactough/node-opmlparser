@@ -14,7 +14,7 @@ var sax = require('sax')
   , fs = require('fs')
   , url = require('url')
   , util = require('util')
-  , events = require('events')
+  , EventEmitter = require('events').EventEmitter
   , utils = require('./utils');
 
 /**
@@ -23,110 +23,105 @@ var sax = require('sax')
  * @api public
  */
 function OpmlParser () {
-  var self = this;
-  self._reset();
-  self.stream = sax.createStream(false, {lowercasetags: true}); // https://github.com/isaacs/sax-js
-  self.stream.on('error', function (e){ self.handleSaxError(e, self); });
-  self.stream.on('opentag', function (n){ self.handleOpenTag(n, self); });
-  self.stream.on('closetag', function (el){ self.handleCloseTag(el, self); });
-  self.stream.on('text', function (text){ self.handleText(text, self); });
-  self.stream.on('cdata', function (text){ self.handleText(text, self); });
-  self.stream.on('end', function (){ self.handleEnd(self); });
-  events.EventEmitter.call(this);
+  this._reset();
+  // See https://github.com/isaacs/sax-js for more info
+  this.stream = sax.createStream(false /* strict mode - no by default */, {lowercase: true, xmlns: false });
+  this.stream.on('error', this.handleError.bind(this, this.handleSaxError.bind(this)));
+  this.stream.on('opentag', this.handleOpenTag.bind(this));
+  this.stream.on('closetag',this.handleCloseTag.bind(this));
+  this.stream.on('text', this.handleText.bind(this));
+  this.stream.on('cdata', this.handleText.bind(this));
+  this.stream.on('end', this.handleEnd.bind(this));
+  EventEmitter.call(this);
 }
 
-util.inherits(OpmlParser, events.EventEmitter);
+util.inherits(OpmlParser, EventEmitter);
 
-OpmlParser.prototype.handleEnd = function (scope){
-  var self = scope;
-  var meta = self.meta
-    , feeds = (self.feeds.length ? self.feeds : null)
-    , outline = self.outline;
+OpmlParser.prototype.handleEnd = function () {
+  var meta = this.meta
+    , feeds = (this.feeds.length ? this.feeds : null)
+    , outline = this.outline;
 
-  self.emit('outline', outline);
-  self.emit('end', meta, feeds, outline);
+  this.emit('outline', outline);
+  this.emit('end', meta, feeds, outline);
 
-  if ('function' == typeof self.callback) {
-    if (self.errors.length) {
-      var error = self.errors.pop();
-      if (self.errors.length) {
-        error.errors = self.errors;
+  if ('function' == typeof this.callback) {
+    if (this.errors.length) {
+      var error = this.errors.pop();
+      if (this.errors.length) {
+        error.errors = this.errors;
       }
-      self.callback(error);
+      this.callback(error);
     } else {
-      self.callback(null, meta, feeds, outline);
+      this.callback(null, meta, feeds, outline);
     }
   }
-  self._reset();
+  this._reset();
 };
 
-OpmlParser.prototype.handleSaxError = function (e, scope){
-  var self = scope;
-  self.handleError(e, self);
-  if (self._parser) {
-    self._parser.error = null;
-    self._parser.resume();
+OpmlParser.prototype.handleSaxError = function () {
+  if (this.stream._parser) {
+    this.stream._parser.error = null;
+    this.stream._parser.resume();
   }
 };
 
-OpmlParser.prototype.handleError = function (e, scope){
-  var self = scope;
-  self.emit('error', e);
-  self.errors.push(e);
+OpmlParser.prototype.handleError = function (next, e) {
+  // A SaxError will prepend an error-handling callback,
+  // but other calls to #handleError will not
+  if (next && !e) {
+    e = next;
+    next = null;
+  }
+  // Only emit the error event if we are not using CPS or
+  // if we have a listener on 'error' even if we are using CPS
+  if (!this.silenceErrors && (!this.callback || this.listeners('error').length)) {
+    this.emit('error', e);
+  }
+  this.errors.push(e);
+  if (typeof next === 'function') {
+    next();
+  } else {
+    ['opentag', 'closetag', 'text', 'cdata', 'end'].forEach(function(ev){
+      this.stream && this.stream.removeAllListeners(ev);
+    }, this);
+    this.handleEnd();
+  }
 };
 
-OpmlParser.prototype.handleOpenTag = function (node, scope){
-  var self = scope;
+OpmlParser.prototype.handleOpenTag = function (node) {
   var n = {};
   n['#name'] = node.name; // Avoid namespace collissions later...
   n['@'] = {};
   n['#'] = '';
 
-  function handleAttributes (attrs, el) {
-    Object.keys(attrs).forEach(function(name){
-      if (self.xmlbase.length && (name == 'href' || name == 'src')) {
-        // Apply xml:base to these elements as they appear
-        // rather than leaving it to the ultimate parser
-        attrs[name] = url.resolve(self.xmlbase[0]['#'], attrs[name]);
-      } else if (name == 'xml:base') {
-        if (self.xmlbase.length) {
-          attrs[name] = url.resolve(self.xmlbase[0]['#'], attrs[name]);
-        }
-        self.xmlbase.unshift({ '#name': el, '#': attrs[name]});
-      }
-      attrs[name] = attrs[name].trim();
-    });
-    return attrs;
-  }
-
   if (Object.keys(node.attributes).length) {
-    n['@'] = handleAttributes(node.attributes, n['#name']);
+    n['@'] = this.handleAttributes(node.attributes, n['#name']);
   }
 
-  if (self.stack.length === 0 && n['#name'] == 'opml') {
-    self.meta['#ns'] = [];
-    self.meta['@'] = [];
+  if (this.stack.length === 0 && n['#name'] == 'opml') {
+    this.meta['#ns'] = [];
+    this.meta['@'] = [];
     Object.keys(n['@']).forEach(function(name) {
       var o = {};
       o[name] = n['@'][name];
       if (name.indexOf('xmlns') === 0) {
-        self.meta['#ns'].push(o);
+        this.meta['#ns'].push(o);
       } else if (name != 'version') {
-        self.meta['@'].push(o);
+        this.meta['@'].push(o);
       }
-    });
-    self.meta['#version'] = n['@']['version'] || '1.1';
+    }, this);
+    this.meta['#version'] = n['@']['version'] || '1.1';
   }
-  self.stack.unshift(n);
+  this.stack.unshift(n);
 };
 
-OpmlParser.prototype.handleCloseTag = function (el, scope){
-  var self = scope;
-  var n = self.stack.shift();
+OpmlParser.prototype.handleCloseTag = function (el) {
+  var n = this.stack.shift();
   delete n['#name'];
 
-  if (self.xmlbase.length && (el == self.xmlbase[0]['#name'])) {
-    void self.xmlbase.shift();
+  if (this.xmlbase.length && (el == this.xmlbase[0]['#name'])) {
+    void this.xmlbase.shift();
   }
 
   if ('#' in n) {
@@ -141,57 +136,73 @@ OpmlParser.prototype.handleCloseTag = function (el, scope){
   }
 
   if (el == 'outline') { // We have an outline node
-    if (!self.meta.title) { // We haven't yet parsed all the metadata
-      utils.merge(self.meta, handleMeta(self.stack[1].head), true);
-      self.emit('meta', self.meta);
+    if (!this.meta.title) { // We haven't yet parsed all the metadata
+      utils.merge(this.meta, this.handleMeta(this.stack[1].head), true);
+      this.emit('meta', this.meta);
     }
     // These three lines reassign attributes to properties of the outline object and
     // preserve child outlines
     var children = n.outline;
     n = n['@'];
-    if ('category' in n) n['categories'] = getCategories(n);
+    if ('category' in n) n['categories'] = this.getCategories(n);
     if (children) n.outline = children;
 
     if ('xmlurl' in n) { // a feed is found
       var feed = n;
-      feed.folder = getFolderName(self.stack[0]);
-      feed.meta = self.meta;
-      self.emit('feed', feed);
-      self.feeds.push(feed);
+      feed.folder = this.getFolderName(this.stack[0]);
+      feed.meta = this.meta;
+      this.emit('feed', feed);
+      this.feeds.push(feed);
     }
-  } else if (el == 'head' && !self.meta.title) { // We haven't yet parsed all the metadata
-    utils.merge(self.meta, handleMeta(n), true);
-    self.emit('meta', self.meta);
+  } else if (el == 'head' && !this.meta.title) { // We haven't yet parsed all the metadata
+    utils.merge(this.meta, this.handleMeta(n), true);
+    this.emit('meta', this.meta);
   }
 
-  if (self.stack.length > 0) {
-    if (!self.stack[0].hasOwnProperty(el)) {
-      if (self.stack[0]['#name'] == 'outline' || self.stack[0]['#name'] == 'body') self.stack[0][el] = [n];
-      else self.stack[0][el] = n;
-    } else if (self.stack[0][el] instanceof Array) {
-      self.stack[0][el].push(n);
+  if (this.stack.length > 0) {
+    if (!this.stack[0].hasOwnProperty(el)) {
+      if (this.stack[0]['#name'] == 'outline' || this.stack[0]['#name'] == 'body') this.stack[0][el] = [n];
+      else this.stack[0][el] = n;
+    } else if (this.stack[0][el] instanceof Array) {
+      this.stack[0][el].push(n);
     } else {
-      self.stack[0][el] = [self.stack[0][el], n];
+      this.stack[0][el] = [this.stack[0][el], n];
     }
   } else {
     if ('body' in n && 'outline' in n.body) {
-      self.outline = n.body.outline;
+      this.outline = n.body.outline;
     }
   }
 };
 
-OpmlParser.prototype.handleText = function (text, scope){
-  var self = scope;
-  if (self.stack.length) {
-    if ('#' in self.stack[0]) {
-      self.stack[0]['#'] += text;
+OpmlParser.prototype.handleText = function (text) {
+  if (this.stack.length) {
+    if (this.stack[0] && '#' in this.stack[0]) {
+      this.stack[0]['#'] += text;
     } else {
-      self.stack[0]['#'] = text;
+      this.stack[0]['#'] = text;
     }
   }
 };
 
-function handleMeta (node){
+OpmlParser.prototype.handleAttributes = function (attrs, el) {
+  Object.keys(attrs).forEach(function(name){
+    if (this.xmlbase.length && (name == 'href' || name == 'src')) {
+      // Apply xml:base to these elements as they appear
+      // rather than leaving it to the ultimate parser
+      attrs[name] = url.resolve(this.xmlbase[0]['#'], attrs[name]);
+    } else if (name == 'xml:base') {
+      if (this.xmlbase.length) {
+        attrs[name] = url.resolve(this.xmlbase[0]['#'], attrs[name]);
+      }
+      this.xmlbase.unshift({ '#name': el, '#': attrs[name]});
+    }
+    attrs[name] = attrs[name] ? attrs[name].trim() : '';
+  }, this);
+  return attrs;
+};
+
+OpmlParser.prototype.handleMeta = function (node) {
   if (!node) return {};
 
   var meta = {};
@@ -244,21 +255,21 @@ function handleMeta (node){
     if (name.indexOf('#') !== 0 && ~name.indexOf(':')) meta[name] = el;
   });
   return meta;
-}
+};
 
-function getFolderName (node){
+OpmlParser.prototype.getFolderName = function (node) {
   if (!node) return '';
 
   if (utils.get(node, '#name') == 'outline' && utils.get(node, '@') && utils.get(node['@'], 'text'))
     return utils.get(node['@'], 'text');
   else
     return '';
-}
+};
 
-function getCategories (node){
+OpmlParser.prototype.getCategories = function (node) {
   if (!node || !('category' in node)) return [];
   else return utils.get(node, 'category').split(',').map(function (cat){ return cat.trim(); });
-}
+};
 
 OpmlParser.prototype._reset = function () {
   this.meta = {};
@@ -273,7 +284,6 @@ OpmlParser.prototype._reset = function () {
 OpmlParser.prototype._setCallback = function (callback){
   this.callback = ('function' == typeof callback) ? callback : undefined;
 };
-
 
 /**
  * Parses opml contained in a string.
