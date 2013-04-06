@@ -37,6 +37,8 @@ function OpmlParser (options) {
   this.stream.on('cdata', this.handleText.bind(this));
   this.stream.on('end', this.handleEnd.bind(this));
   Stream.call(this);
+  this.writable = true;
+  this.readable = true;
 }
 util.inherits(OpmlParser, Stream);
 
@@ -295,6 +297,18 @@ OpmlParser.prototype.getCategories = function (node) {
   if (!node || !('category' in node)) return [];
   else return utils.unique(utils.get(node, 'category').split(',').map(function (cat){ return cat.trim(); }));
 };
+
+// Naive Stream API
+OpmlParser.prototype.write = function (data) {
+  this.stream.write(data);
+  return true;
+}
+
+OpmlParser.prototype.end = function (chunk) {
+  if (chunk && chunk.length) this.stream.write(chunk);
+  this.stream.end();
+  return true;
+}
 
 function opmlparser (options, callback) {
   if ('function' === typeof options) {
