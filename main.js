@@ -313,6 +313,7 @@ OpmlParser.prototype.parseString = function(string, callback) {
   self.stream
     .on('error', function (e){ self.handleError(e, self); })
     .end(string, 'utf8');
+  return this;
 };
 
 /**
@@ -333,6 +334,7 @@ OpmlParser.prototype.parseFile = function(file, callback) {
     fs.createReadStream(file)
       .on('error', function (e){ self.handleError(e, self); })
       .pipe(self.stream);
+    return this;
   }
 };
 
@@ -355,6 +357,7 @@ OpmlParser.prototype.parseUrl = function(url, callback) {
   request(url)
     .on('error', function (e){ self.handleError(e, self); })
     .pipe(self.stream);
+  return this;
 };
 
 /**
@@ -379,6 +382,7 @@ OpmlParser.prototype.parseStream = function(stream, callback) {
   stream
     .on('error', function (e){ self.handleError(e, self); })
     .pipe(self.stream);
+  return this;
 };
 
 exports = module.exports = OpmlParser;
