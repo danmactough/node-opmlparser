@@ -15,6 +15,7 @@ var sax = require('sax')
   , URL = require('url')
   , util = require('util')
   , EventEmitter = require('events').EventEmitter
+  , Stream = require('stream').Stream
   , STATUS_CODES = require('http').STATUS_CODES
   , utils = require('./utils');
 
@@ -35,9 +36,9 @@ function OpmlParser (options) {
   this.stream.on('text', this.handleText.bind(this));
   this.stream.on('cdata', this.handleText.bind(this));
   this.stream.on('end', this.handleEnd.bind(this));
-  EventEmitter.call(this);
+  Stream.call(this);
 }
-util.inherits(OpmlParser, EventEmitter);
+util.inherits(OpmlParser, Stream);
 
 /*
  * Initializes the SAX stream
@@ -293,10 +294,6 @@ OpmlParser.prototype.getFolderName = function (node) {
 OpmlParser.prototype.getCategories = function (node) {
   if (!node || !('category' in node)) return [];
   else return utils.unique(utils.get(node, 'category').split(',').map(function (cat){ return cat.trim(); }));
-};
-
-OpmlParser.prototype._setCallback = function (callback){
-  this.callback = ('function' == typeof callback) ? callback : undefined;
 };
 
 function opmlparser (options, callback) {
