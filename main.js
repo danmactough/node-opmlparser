@@ -12,8 +12,10 @@
 var sax = require('sax')
   , request = require('request')
   , fs = require('fs')
+  , URL = require('url')
   , util = require('util')
   , EventEmitter = require('events').EventEmitter
+  , STATUS_CODES = require('http').STATUS_CODES
   , utils = require('./utils');
 
 /**
@@ -297,6 +299,16 @@ OpmlParser.prototype._setCallback = function (callback){
   this.callback = ('function' == typeof callback) ? callback : undefined;
 };
 
+function opmlparser (options, callback) {
+  if ('function' === typeof options) {
+    callback = options;
+    options = {};
+  }
+  var op = new OpmlParser(options);
+  op.callback = callback;
+  return op;
+}
+
 /**
  * Parses opml contained in a string.
  *
@@ -338,13 +350,15 @@ OpmlParser.prototype._setCallback = function (callback){
  * @api public
  */
 
-OpmlParser.prototype.parseString = function(string, callback) {
-  var self = this;
-  self._setCallback(callback);
-  self.stream
-    .on('error', function (e){ self.handleError(e, self); })
-    .end(string, 'utf8');
-  return this;
+OpmlParser.parseString = function(string, options, callback) {
+  var op = opmlparser(options, callback);
+  // Must delay to give caller a change to attach event handlers
+  process.nextTick(function(){
+    op.stream
+      .on('error', op.handleError.bind(op))
+      .end(string, Buffer.isBuffer(string) ? null : 'utf8'); // Accomodate a Buffer in addition to a String
+  });
+  return op;
 };
 
 /**
@@ -356,17 +370,15 @@ OpmlParser.prototype.parseString = function(string, callback) {
  * @api public
  */
 
-OpmlParser.prototype.parseFile = function(file, callback) {
-  var self = this;
-  if (/^https?:/.test(file) || (typeof file == 'object' && 'protocol' in file)) {
-    self.parseUrl(file, callback);
-  } else {
-    self._setCallback(callback);
-    fs.createReadStream(file)
-      .on('error', function (e){ self.handleError(e, self); })
-      .pipe(self.stream);
-    return this;
+OpmlParser.parseFile = function(file, options, callback) {
+  if (/^https?:/.test(file) || (typeof file === 'object' && ('href' in file || 'uri' in file || 'url' in file))) {
+    return OpmlParser.parseUrl(file, options, callback);
   }
+  var op = opmlparser(options, callback);
+  fs.createReadStream(file)
+    .on('error', op.handleError.bind(op))
+    .pipe(op.stream);
+  return op;
 };
 
 /**
@@ -382,17 +394,102 @@ OpmlParser.prototype.parseFile = function(file, callback) {
  * @api public
  */
 
-OpmlParser.prototype.parseUrl = function(url, callback) {
-  var self = this;
-  self._setCallback(callback);
+OpmlParser.parseUrl = function(url, options, callback) {
+  var op = opmlparser(options, callback);
+
+  var handleResponse = function (response) {
+    op.response = response;
+    op.emit('response', response);
+    var code = response.statusCode;
+    var codeReason = STATUS_CODES[code] || 'Unknown Failure';
+    var contentType = response.headers && response.headers['content-type'];
+    var e = new Error();
+    if (code !== 200) {
+      if (code === 304) {
+        op.emit('304');
+        op.meta = op.feeds = op.outline = null;
+        op.silenceErrors = true;
+        op.removeAllListeners('complete');
+        op.removeAllListeners('meta');
+        op.removeAllListeners('feed');
+        op.removeAllListeners('outline');
+        op.handleEnd();
+      }
+      else {
+        e.message = 'Remote server responded: ' + codeReason;
+        e.code = code;
+        e.url = url;
+        op.handleError(e);
+        response.request && response.request.abort();
+      }
+      return;
+    }
+    op.meta['#content-type'] = contentType;
+    return;
+  };
+
+  // Make sure we have a url and normalize the request object
+  var invalid = 'Invalid URL: must be a string or valid request object - %s';
+
+  if (/^https?:/.test(url)) {
+    url = {
+      uri: url
+    };
+  } else if (url && typeof url === 'object') {
+    if ('href' in url) { // parsed url
+      if (!/^https?:/.test(URL.format(url))) {
+        throw (new Error(util.format(invalid, url)));
+      }
+      url = {
+        url: url
+      };
+    } else {
+      if (url.url && url.uri) delete url.uri; // wtf?!
+      if (! (url.url || url.uri) ) throw (new Error(util.format(invalid, url)));
+      if (url.url) {
+        if (/^https?:/.test(url.url)) {
+          url.uri = url.url;
+          delete url.url;
+        } else if ( !(typeof url.url === 'object' && 'href' in url.url && /^https?:/.test(URL.format(url.url))) ) {
+          // not a string, not a parsed url
+          throw (new Error(util.format(invalid, url.url)));
+        }
+      }
+      if (url.uri) {
+        if ( typeof url.uri === 'object' && 'href' in url.uri && /^https?:/.test(URL.format(url.uri)) ) {
+          url.url = url.uri;
+          delete url.uri;
+        } else if (!/^https?:/.test(url.uri)) {
+          // not a string, not a parsed url
+          throw (new Error(util.format(invalid, url.uri)));
+        }
+      }
+    }
+  } else {
+    throw (new Error(util.format(invalid, url)));
+  }
+
+  url.headers = url.headers || {};
+  url.headers['Accept-Encoding'] = 'identity';
+
+  if (!op.xmlbase.length) {
+    if (url.uri) {
+      op.xmlbase.unshift({ '#name': 'xml', '#': url.uri });
+    } else if (url.url) {
+      op.xmlbase.unshift({ '#name': 'xml', '#': URL.format(url.url) });
+    }
+  }
+
   request(url)
-    .on('error', function (e){ self.handleError(e, self); })
-    .pipe(self.stream);
-  return this;
+    .on('error', op.handleError.bind(op))
+    .on('response', handleResponse)
+    .pipe(op.stream)
+    ;
+  return op;
 };
 
 /**
- * Parses a feed from a Stream.
+ * Parses a OPML from a Stream.
  *
  * Example:
  *    parser = new OpmlParser();
@@ -407,13 +504,12 @@ OpmlParser.prototype.parseUrl = function(url, callback) {
  * @api public
  */
 
-OpmlParser.prototype.parseStream = function(stream, callback) {
-  var self = this;
-  self._setCallback(callback);
-  stream
-    .on('error', function (e){ self.handleError(e, self); })
-    .pipe(self.stream);
-  return this;
+OpmlParser.parseStream = function(stream, options, callback) {
+  var op = opmlparser(options, callback);
+  stream && stream
+    .on('error', op.handleError.bind(op))
+    .pipe(op.stream);
+  return op;
 };
 
 exports = module.exports = OpmlParser;
