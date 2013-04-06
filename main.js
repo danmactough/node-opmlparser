@@ -12,7 +12,6 @@
 var sax = require('sax')
   , request = require('request')
   , fs = require('fs')
-  , url = require('url')
   , util = require('util')
   , EventEmitter = require('events').EventEmitter
   , utils = require('./utils');
@@ -160,7 +159,7 @@ OpmlParser.prototype.handleCloseTag = function (el) {
   }
 
   if (this.stack.length > 0) {
-    if (!this.stack[0].hasOwnProperty(el)) {
+    if (!utils.has(this.stack[0], el)) {
       if (this.stack[0]['#name'] == 'outline' || this.stack[0]['#name'] == 'body') this.stack[0][el] = [n];
       else this.stack[0][el] = n;
     } else if (this.stack[0][el] instanceof Array) {
@@ -190,10 +189,10 @@ OpmlParser.prototype.handleAttributes = function (attrs, el) {
     if (this.xmlbase.length && (name == 'href' || name == 'src')) {
       // Apply xml:base to these elements as they appear
       // rather than leaving it to the ultimate parser
-      attrs[name] = url.resolve(this.xmlbase[0]['#'], attrs[name]);
+      attrs[name] = utils.resolve(this.xmlbase[0]['#'], attrs[name]);
     } else if (name == 'xml:base') {
       if (this.xmlbase.length) {
-        attrs[name] = url.resolve(this.xmlbase[0]['#'], attrs[name]);
+        attrs[name] = utils.resolve(this.xmlbase[0]['#'], attrs[name]);
       }
       this.xmlbase.unshift({ '#name': el, '#': attrs[name]});
     }
@@ -250,7 +249,7 @@ OpmlParser.prototype.getFolderName = function (node) {
 
 OpmlParser.prototype.getCategories = function (node) {
   if (!node || !('category' in node)) return [];
-  else return utils.get(node, 'category').split(',').map(function (cat){ return cat.trim(); });
+  else return utils.unique(utils.get(node, 'category').split(',').map(function (cat){ return cat.trim(); }));
 };
 
 OpmlParser.prototype._reset = function () {
