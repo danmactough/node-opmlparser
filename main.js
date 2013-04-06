@@ -14,7 +14,6 @@ var sax = require('sax')
   , fs = require('fs')
   , URL = require('url')
   , util = require('util')
-  , EventEmitter = require('events').EventEmitter
   , Stream = require('stream').Stream
   , STATUS_CODES = require('http').STATUS_CODES
   , utils = require('./utils');
@@ -162,8 +161,14 @@ OpmlParser.prototype.handleOpenTag = function (node) {
 };
 
 OpmlParser.prototype.handleCloseTag = function (el) {
-  var n = this.stack.shift();
+  var n = this.stack.shift()
+    , baseurl;
+
   delete n['#name'];
+
+  if (this.xmlbase && this.xmlbase.length) {
+    baseurl = this.xmlbase[0]['#'];
+  }
 
   if (this.xmlbase.length && (el == this.xmlbase[0]['#name'])) {
     void this.xmlbase.shift();
@@ -185,6 +190,9 @@ OpmlParser.prototype.handleCloseTag = function (el) {
       utils.merge(this.meta, this.handleMeta(this.stack[1].head), true);
       this.emit('meta', this.meta);
     }
+    if (!baseurl && this.xmlbase && this.xmlbase.length) { // handleMeta was able to infer a baseurl without xml:base or options.feedurl
+      n = utils.reresolve(n, this.xmlbase[0]['#']);
+    }
     // These three lines reassign attributes to properties of the outline object and
     // preserve child outlines
     var children = n.outline;
@@ -195,7 +203,9 @@ OpmlParser.prototype.handleCloseTag = function (el) {
     if ('xmlurl' in n) { // a feed is found
       var feed = n;
       feed.folder = this.getFolderName(this.stack[0]);
-      feed.meta = this.meta;
+      if (this.options.addmeta) {
+        feed.meta = this.meta;
+      }
       this.emit('feed', feed);
       this.feeds.push(feed);
     }
@@ -302,13 +312,13 @@ OpmlParser.prototype.getCategories = function (node) {
 OpmlParser.prototype.write = function (data) {
   this.stream.write(data);
   return true;
-}
+};
 
 OpmlParser.prototype.end = function (chunk) {
   if (chunk && chunk.length) this.stream.write(chunk);
   this.stream.end();
   return true;
-}
+};
 
 function opmlparser (options, callback) {
   if ('function' === typeof options) {
