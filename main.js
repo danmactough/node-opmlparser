@@ -10,13 +10,18 @@
  * Module dependencies.
  */
 var sax = require('sax')
-  , request = require('request')
-  , fs = require('fs')
+  , addressparser = require('addressparser')
+  , indexOfObject = require('array-indexofobject')
+  , resanitize = require('resanitize')
   , URL = require('url')
   , util = require('util')
-  , Stream = require('stream').Stream
-  , STATUS_CODES = require('http').STATUS_CODES
-  , utils = require('./utils');
+  , TransformStream = require('stream').Transform
+  , utils = require('./utils')
+  ;
+
+if (TransformStream === undefined) {
+  TransformStream = require('readable-stream').Transform;
+}
 
 /**
  * OpmlParser constructor. Most apps will only use one instance.
@@ -25,21 +30,23 @@ var sax = require('sax')
  */
 function OpmlParser (options) {
   if (!(this instanceof OpmlParser)) return new OpmlParser(options);
+  TransformStream.call(this);
+  this._readableState.objectMode = true;
+  this._readableState.highWaterMark = 16; // max. # of output nodes buffered
+
   this.init();
   this.parseOpts(options);
   // See https://github.com/isaacs/sax-js for more info
   this.stream = sax.createStream(this.options.strict /* strict mode - no by default */, {lowercase: true, xmlns: false });
-  this.stream.on('error', this.handleError.bind(this, this.handleSaxError.bind(this)));
+  this.stream.on('error', this.handleSaxError.bind(this));
+  this.stream.on('processinginstruction', this.handleProcessingInstruction.bind(this));
   this.stream.on('opentag', this.handleOpenTag.bind(this));
   this.stream.on('closetag',this.handleCloseTag.bind(this));
   this.stream.on('text', this.handleText.bind(this));
   this.stream.on('cdata', this.handleText.bind(this));
   this.stream.on('end', this.handleEnd.bind(this));
-  Stream.call(this);
-  this.writable = true;
-  this.readable = true;
 }
-util.inherits(OpmlParser, Stream);
+util.inherits(OpmlParser, TransformStream);
 
 /*
  * Initializes the SAX stream
@@ -50,13 +57,12 @@ OpmlParser.prototype.init = function (){
   this.meta = {
     '#ns': []
   , '@': []
+  , '#xml': {}
   };
-  this.feeds = [];
-  this.outline = {};
+  this._emitted_meta = false;
   this.stack = [];
   this.xmlbase = [];
   this.errors = [];
-  this.silenceErrors = false;
 };
 
 /*
@@ -65,7 +71,9 @@ OpmlParser.prototype.init = function (){
 OpmlParser.prototype.parseOpts = function (options) {
   this.options = options || {};
   if (!('strict' in this.options)) this.options.strict = false;
+  if (!('normalize' in this.options)) this.options.normalize = true;
   if (!('addmeta' in this.options)) this.options.addmeta = true;
+  if (!('resume_saxerror' in this.options)) this.options.resume_saxerror = true;
   if ('MAX_BUFFER_LENGTH' in this.options) {
     sax.MAX_BUFFER_LENGTH = this.options.MAX_BUFFER_LENGTH; // set to Infinity to have unlimited buffers
   } else {
@@ -75,35 +83,23 @@ OpmlParser.prototype.parseOpts = function (options) {
 };
 
 OpmlParser.prototype.handleEnd = function () {
-  var meta = this.meta
-    , feeds = (this.feeds.length ? this.feeds : null)
-    , outline = this.outline;
-
-  if ('function' === typeof this.callback) {
-    if (this.errors.length) {
-      var error = this.errors.pop();
-      if (this.errors.length) {
-        error.errors = this.errors;
-      }
-      this.callback(error);
-    } else {
-      this.callback(null,  meta, feeds, outline);
-    }
+  // We made it to the end without throwing, but let's make sure we were actually
+  // parsing a feed
+  if (this.meta && !this.meta['#type']) {
+    var e = new Error('Not an outline');
+    return this.handleError(e);
   }
-  if (!this.errors.length) {
-    this.emit('outline', outline);
-    this.emit('complete',  meta, feeds, outline);
-  }
-  this.emit('end');
-  if (this.stream) {
-    this.stream.removeAllListeners('end');
-    this.stream.removeAllListeners('error');
-  }
-  this.stream.on('error', function() {});
-  this.stream._parser.close();
+  this.push(null);
 };
 
-OpmlParser.prototype.handleSaxError = function () {
+OpmlParser.prototype.handleSaxError = function (e) {
+  this.emit('error', e);
+  if (this.options.resume_saxerror) {
+    this.resumeSaxError();
+  }
+};
+
+OpmlParser.prototype.resumeSaxError = function () {
   if (this.stream._parser) {
     this.stream._parser.error = null;
     this.stream._parser.resume();
@@ -111,31 +107,24 @@ OpmlParser.prototype.handleSaxError = function () {
 };
 
 OpmlParser.prototype.handleError = function (next, e) {
-  // A SaxError will prepend an error-handling callback,
-  // but other calls to #handleError will not
-  if (next && !e) {
-    e = next;
-    next = null;
-  }
-  // Only emit the error event if we are not using CPS or
-  // if we have a listener on 'error' even if we are using CPS
-  if (!this.silenceErrors && (!this.callback || this.listeners('error').length)) {
-    this.emit('error', e);
-  }
-  this.errors.push(e);
-  if (typeof next === 'function') {
-    next();
-  } else {
-    ['opentag', 'closetag', 'text', 'cdata', 'end'].forEach(function(ev){
-      this.stream && this.stream.removeAllListeners(ev);
-    }, this);
-    this.handleEnd();
-  }
+  this.emit('error', e);
+};
+
+OpmlParser.prototype.handleProcessingInstruction = function (node) {
+  if (node.name !== 'xml') return;
+  this.meta['#xml'] = node.body.trim().split(' ').reduce(function (map, attr) {
+    var parts = attr.split('=');
+    map[parts[0]] = parts[1] && parts[1].length > 2 && parts[1].match(/^.(.*?).$/)[1];
+    return map;
+  }, {});
 };
 
 OpmlParser.prototype.handleOpenTag = function (node) {
   var n = {};
   n['#name'] = node.name; // Avoid namespace collissions later...
+  n['#prefix'] = node.prefix; // The current ns prefix
+  n['#local'] = node.local; // The current element name, sans prefix
+  n['#uri'] = node.uri; // The current ns uri
   n['@'] = {};
   n['#'] = '';
 
@@ -143,7 +132,8 @@ OpmlParser.prototype.handleOpenTag = function (node) {
     n['@'] = this.handleAttributes(node.attributes, n['#name']);
   }
 
-  if (this.stack.length === 0 && n['#name'] == 'opml') {
+  if (this.stack.length === 0 &&
+     (n['#name'] === 'opml' || (n['#local'] === 'opml' && utils.nslookup([n['#uri']], 'opml')))) {
     this.meta['#ns'] = [];
     this.meta['@'] = [];
     Object.keys(n['@']).forEach(function(name) {
@@ -161,10 +151,33 @@ OpmlParser.prototype.handleOpenTag = function (node) {
 };
 
 OpmlParser.prototype.handleCloseTag = function (el) {
-  var n = this.stack.shift()
-    , baseurl;
+  var node = { '#name' : el
+             , '#prefix' : ''
+             , '#local' : '' }
+    , stdEl
+    , item
+    , baseurl
+    ;
+  var n = this.stack.shift();
+  el = el.split(':');
 
+  if (el.length > 1 && el[0] === n['#prefix']) {
+    if (utils.nslookup(n['#uri'], 'opml')) {
+      node['#prefix'] = el[0];
+      node['#local'] = el.slice(1).join(':');
+      node['#type'] = 'opml';
+    } else {
+      node['#prefix'] = utils.nsprefix(n['#uri']) || n['#prefix'];
+      node['#local'] = el.slice(1).join(':');
+    }
+  } else {
+    node['#local'] = node['#name'];
+    node['#type'] = utils.nsprefix(n['#uri']) || n['#prefix'];
+  }
   delete n['#name'];
+  delete n['#local'];
+  delete n['#prefix'];
+  delete n['#uri'];
 
   if (this.xmlbase && this.xmlbase.length) {
     baseurl = this.xmlbase[0]['#'];
@@ -176,19 +189,23 @@ OpmlParser.prototype.handleCloseTag = function (el) {
 
   if ('#' in n) {
     if (n['#'].match(/^\s*$/)) {
+      // Delete text nodes with nothing by whitespace
       delete n['#'];
     } else {
       n['#'] = n['#'].trim();
-      if (Object.keys(n).length === 1 && el != 'outline') {
+      if (Object.keys(n).length === 1 && node['#name'] != 'outline') {
         n = n['#'];
       }
     }
   }
 
-  if (el == 'outline') { // We have an outline node
+  if (node['#name'] === 'outline') { // We have an outline node
     if (!this.meta.title) { // We haven't yet parsed all the metadata
       utils.merge(this.meta, this.handleMeta(this.stack[1].head), true);
-      this.emit('meta', this.meta);
+      if (!this._emitted_meta) {
+        this.emit('meta', this.meta);
+        this._emitted_meta = true;
+      }
     }
     if (!baseurl && this.xmlbase && this.xmlbase.length) { // handleMeta was able to infer a baseurl without xml:base or options.feedurl
       n = utils.reresolve(n, this.xmlbase[0]['#']);
@@ -201,31 +218,37 @@ OpmlParser.prototype.handleCloseTag = function (el) {
     if (children) n.outline = children;
 
     if ('xmlurl' in n) { // a feed is found
-      var feed = n;
-      feed.folder = this.getFolderName(this.stack[0]);
+      n.folder = this.getFolderName(this.stack[0]);
       if (this.options.addmeta) {
-        feed.meta = this.meta;
+        n.meta = this.meta;
       }
-      this.emit('feed', feed);
-      this.feeds.push(feed);
+      this.emit('feed', n);
     }
-  } else if (el == 'head' && !this.meta.title) { // We haven't yet parsed all the metadata
+    this.push(n);
+  } else if ((node['#name'] === 'head' ||
+            (node['#local'] === 'head' && (node['#prefix'] === '' || node['#type'] === 'opml'))) &&
+            !this.meta.title) { // We haven't yet parsed all the metadata
     utils.merge(this.meta, this.handleMeta(n), true);
-    this.emit('meta', this.meta);
+    if (!this._emitted_meta) {
+      this.emit('meta', this.meta);
+      this._emitted_meta = true;
+    }
   }
 
   if (this.stack.length > 0) {
-    if (!utils.has(this.stack[0], el)) {
-      if (this.stack[0]['#name'] == 'outline' || this.stack[0]['#name'] == 'body') this.stack[0][el] = [n];
-      else this.stack[0][el] = n;
-    } else if (this.stack[0][el] instanceof Array) {
-      this.stack[0][el].push(n);
+    if (node['#prefix'] && node['#local'] && !node['#type']) {
+      stdEl = node['#prefix'] + ':' + node['#local'];
+    } else if (node['#name'] && node['#type'] && node['#type'] !== this.meta['#type']) {
+      stdEl = node['#name'];
     } else {
-      this.stack[0][el] = [this.stack[0][el], n];
+      stdEl = node['#local'] || node['#name'];
     }
-  } else {
-    if ('body' in n && 'outline' in n.body) {
-      this.outline = n.body.outline;
+    if (!this.stack[0].hasOwnProperty(stdEl)) {
+      this.stack[0][stdEl] = n;
+    } else if (this.stack[0][stdEl] instanceof Array) {
+      this.stack[0][stdEl].push(n);
+    } else {
+      this.stack[0][stdEl] = [this.stack[0][stdEl], n];
     }
   }
 };
@@ -309,228 +332,14 @@ OpmlParser.prototype.getCategories = function (node) {
 };
 
 // Naive Stream API
-OpmlParser.prototype.write = function (data) {
+OpmlParser.prototype._transform = function (data, encoding, done) {
   this.stream.write(data);
-  return true;
+  done();
 };
 
-OpmlParser.prototype.end = function (chunk) {
-  if (chunk && chunk.length) this.stream.write(chunk);
+OpmlParser.prototype._flush = function (done) {
   this.stream.end();
-  return true;
-};
-
-function opmlparser (options, callback) {
-  if ('function' === typeof options) {
-    callback = options;
-    options = {};
-  }
-  var op = new OpmlParser(options);
-  op.callback = callback;
-  return op;
-}
-
-/**
- * Parses opml contained in a string.
- *
- * For each feed, emits a 'feed' event
- * with an object containing the keys corresponding to the attributes that are present (or null)
- * (keep in mind that no validation is done, so other arbitrary (and invalid) attributes
- * may also be present):
- *   title {String}
- *   text {String}
- *   xmlUrl {String}
- *   htmlUrl {String}
- *   description {String}
- *   type {String}
- *   language {Object}
- *   version {Object}
- *   Object.keys(meta): (any of which may be null)
- *     #ns {Array} key,value pairs of each namespace declared for the OPML
- *     @ {Array} key,value pairs of each attribute set in the root <opml> element
- *     #version {String}
- *     title {String}
- *     dateCreated {Date}
- *     dateModified {Date}
- *     ownerName {String}
- *     ownerId {String}
- *     docs {String}
- *     expansionState {String}
- *     vertScrollState {String}
- *     windowTop {String}
- *     windowLeft {String}
- *     windowBottom {String}
- *     windowRight {String}
- *
- * Emits a 'warning' event on each XML parser warning
- *
- * Emits an 'error' event on each XML parser error
- *
- * @param {String} string of OPML
- * @param {Function} callback
- * @api public
- */
-
-OpmlParser.parseString = function(string, options, callback) {
-  var op = opmlparser(options, callback);
-  // Must delay to give caller a change to attach event handlers
-  process.nextTick(function(){
-    op.stream
-      .on('error', op.handleError.bind(op))
-      .end(string, Buffer.isBuffer(string) ? null : 'utf8'); // Accomodate a Buffer in addition to a String
-  });
-  return op;
-};
-
-/**
- * Parses OPML from a file or (for compatability with libxml) a url.
- * See parseString for more info.
- *
- * @param {String} path to the OPML file or a fully qualified uri or parsed url object from url.parse()
- * @param {Function} callback
- * @api public
- */
-
-OpmlParser.parseFile = function(file, options, callback) {
-  if (/^https?:/.test(file) || (typeof file === 'object' && ('href' in file || 'uri' in file || 'url' in file))) {
-    return OpmlParser.parseUrl(file, options, callback);
-  }
-  var op = opmlparser(options, callback);
-  fs.createReadStream(file)
-    .on('error', op.handleError.bind(op))
-    .pipe(op.stream);
-  return op;
-};
-
-/**
- * Parses OPML from a url.
- *
- * Please consider whether it would be better to perform conditional GETs
- * and pass in the results instead.
- *
- * See parseString for more info.
- *
- * @param {String} fully qualified uri or a parsed url object from url.parse()
- * @param {Function} callback
- * @api public
- */
-
-OpmlParser.parseUrl = function(url, options, callback) {
-  var op = opmlparser(options, callback);
-
-  var handleResponse = function (response) {
-    op.response = response;
-    op.emit('response', response);
-    var code = response.statusCode;
-    var codeReason = STATUS_CODES[code] || 'Unknown Failure';
-    var contentType = response.headers && response.headers['content-type'];
-    var e = new Error();
-    if (code !== 200) {
-      if (code === 304) {
-        op.emit('304');
-        op.meta = op.feeds = op.outline = null;
-        op.silenceErrors = true;
-        op.removeAllListeners('complete');
-        op.removeAllListeners('meta');
-        op.removeAllListeners('feed');
-        op.removeAllListeners('outline');
-        op.handleEnd();
-      }
-      else {
-        e.message = 'Remote server responded: ' + codeReason;
-        e.code = code;
-        e.url = url;
-        op.handleError(e);
-        response.request && response.request.abort();
-      }
-      return;
-    }
-    op.meta['#content-type'] = contentType;
-    return;
-  };
-
-  // Make sure we have a url and normalize the request object
-  var invalid = 'Invalid URL: must be a string or valid request object - %s';
-
-  if (/^https?:/.test(url)) {
-    url = {
-      uri: url
-    };
-  } else if (url && typeof url === 'object') {
-    if ('href' in url) { // parsed url
-      if (!/^https?:/.test(URL.format(url))) {
-        throw (new Error(util.format(invalid, url)));
-      }
-      url = {
-        url: url
-      };
-    } else {
-      if (url.url && url.uri) delete url.uri; // wtf?!
-      if (! (url.url || url.uri) ) throw (new Error(util.format(invalid, url)));
-      if (url.url) {
-        if (/^https?:/.test(url.url)) {
-          url.uri = url.url;
-          delete url.url;
-        } else if ( !(typeof url.url === 'object' && 'href' in url.url && /^https?:/.test(URL.format(url.url))) ) {
-          // not a string, not a parsed url
-          throw (new Error(util.format(invalid, url.url)));
-        }
-      }
-      if (url.uri) {
-        if ( typeof url.uri === 'object' && 'href' in url.uri && /^https?:/.test(URL.format(url.uri)) ) {
-          url.url = url.uri;
-          delete url.uri;
-        } else if (!/^https?:/.test(url.uri)) {
-          // not a string, not a parsed url
-          throw (new Error(util.format(invalid, url.uri)));
-        }
-      }
-    }
-  } else {
-    throw (new Error(util.format(invalid, url)));
-  }
-
-  url.headers = url.headers || {};
-  url.headers['Accept-Encoding'] = 'identity';
-
-  if (!op.xmlbase.length) {
-    if (url.uri) {
-      op.xmlbase.unshift({ '#name': 'xml', '#': url.uri });
-    } else if (url.url) {
-      op.xmlbase.unshift({ '#name': 'xml', '#': URL.format(url.url) });
-    }
-  }
-
-  request(url)
-    .on('error', op.handleError.bind(op))
-    .on('response', handleResponse)
-    .pipe(op.stream)
-    ;
-  return op;
-};
-
-/**
- * Parses a OPML from a Stream.
- *
- * Example:
- *    parser = new OpmlParser();
- *    parser.on('feed', function (feed){ // do something });
- *    parser.parseStream(fs.createReadStream('file.opml')[, callback]);
- *
- *
- * See parseString for more info.
- *
- * @param {String} fully qualified uri or a parsed url object from url.parse()
- * @param {Function} callback
- * @api public
- */
-
-OpmlParser.parseStream = function(stream, options, callback) {
-  var op = opmlparser(options, callback);
-  stream && stream
-    .on('error', op.handleError.bind(op))
-    .pipe(op.stream);
-  return op;
+  done();
 };
 
 exports = module.exports = OpmlParser;
