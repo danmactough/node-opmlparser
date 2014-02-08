@@ -24,7 +24,10 @@
   },
   "dependencies": {
     "sax": "0.5.x",
-    "request": "2.9.x"
+    "array-indexofobject": "0.0.1",
+    "addressparser": "~0.2.0",
+    "readable-stream": "~1.1.10",
+    "resanitize": "~0.3.0"
   },
   "devDependencies": {
     "mocha": "~1.9.0"

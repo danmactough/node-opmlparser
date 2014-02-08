@@ -3,8 +3,8 @@
  * Module dependencies.
  */
 var URL = require('url')
+  , NS = require('./namespaces')
   ;
-
 
 /**
  * Safe hasOwnProperty
@@ -112,6 +112,29 @@ function resolve (baseUrl, pathUrl) {
 exports.resolve = resolve;
 
 /*
+ * Check whether a given namespace URI matches the given default
+ *
+ * @param {String} URI
+ * @param {String} default, e.g., 'atom'
+ * @return {Boolean}
+ */
+function nslookup (uri, def) {
+  return NS[uri] === def;
+}
+exports.nslookup = nslookup;
+
+/*
+ * Return the "default" namespace prefix for a given namespace URI
+ *
+ * @param {String} URI
+ * @return {String}
+ */
+function nsprefix (uri) {
+  return NS[uri];
+}
+exports.nsprefix = nsprefix;
+
+/*
  * Walk a node and re-resolve the urls using the given baseurl
  *
  * @param {Object} node
@@ -131,7 +154,9 @@ function reresolve (node, baseurl) {
       } else {
         if (level[el].constructor.name === 'Object') {
           if (el == 'logo' || el == 'icon') {
-            level[el]['#'] = URL.resolve(baseurl, level[el]['#']);
+            if ('#' in level[el]) {
+              level[el]['#'] = URL.resolve(baseurl, level[el]['#']);
+            }
           } else {
             var attrs = Object.keys(level[el]);
             attrs.forEach(function(name){
