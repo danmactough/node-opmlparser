@@ -55,7 +55,6 @@ OpmlParser.prototype.init = function (){
   , '@': []
   , '#xml': {}
   };
-  this._emitted_meta = false;
   this.stack = [];
   this.xmlbase = [];
   this.errors = [];
@@ -69,7 +68,6 @@ OpmlParser.prototype.parseOpts = function (options) {
   this.options = options || {};
   if (!('strict' in this.options)) this.options.strict = false;
   if (!('normalize' in this.options)) this.options.normalize = true;
-  if (!('addmeta' in this.options)) this.options.addmeta = true;
   if (!('resume_saxerror' in this.options)) this.options.resume_saxerror = true;
   if ('MAX_BUFFER_LENGTH' in this.options) {
     sax.MAX_BUFFER_LENGTH = this.options.MAX_BUFFER_LENGTH; // set to Infinity to have unlimited buffers
@@ -186,10 +184,6 @@ OpmlParser.prototype.handleCloseTag = function (el) {
   if (n['#isoutline']) { // We have an outline node
     if (!this.meta.title) { // We haven't yet parsed all the metadata
       utils.merge(this.meta, this.handleMeta(this.stack[1].head), true);
-      if (!this._emitted_meta) {
-        this.emit('meta', this.meta);
-        this._emitted_meta = true;
-      }
     }
     if (!baseurl && this.xmlbase && this.xmlbase.length) { // handleMeta was able to infer a baseurl without xml:base or options.feedurl
       n = utils.reresolve(n, this.xmlbase[0]['#']);
@@ -200,18 +194,11 @@ OpmlParser.prototype.handleCloseTag = function (el) {
     if ('xmlurl' in n || n.type === 'rss') { // a feed is found
       n.folder = this.getFolderName(this.stack[0]);
     }
-    if (this.options.addmeta) {
-      n.meta = this.meta;
-    }
     this.push(n);
   } else if ((n['#name'] === 'head' ||
             (n['#local'] === 'head' && n['#type'] === 'opml')) &&
             !this.meta.title) { // We haven't yet parsed all the metadata
     utils.merge(this.meta, this.handleMeta(n), true);
-    if (!this._emitted_meta) {
-      this.emit('meta', this.meta);
-      this._emitted_meta = true;
-    }
   }
 
   if (this.stack.length > 0) {
