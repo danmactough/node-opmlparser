@@ -12,8 +12,11 @@ var util = require('util')
 process.stdin.pipe(new OpmlParser())
   .on('error', console.error)
   .on('readable', function() {
-    var stream = this, item;
-    while (item = stream.read()) {
-      console.log(util.inspect(item, null, 10, true));
+    var stream = this, outline;
+    while (outline = stream.read()) {
+      console.log(util.inspect(outline, null, 10, true));
     }
+  })
+  .on('end', function () {
+    console.log(util.inspect(this.meta, null, 10, true));
   });
