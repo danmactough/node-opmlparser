@@ -23,11 +23,8 @@
     "node": ">= 0.8.0"
   },
   "dependencies": {
-    "sax": "0.5.x",
-    "array-indexofobject": "0.0.1",
-    "addressparser": "~0.2.0",
-    "readable-stream": "~1.1.10",
-    "resanitize": "~0.3.0"
+    "sax": "~0.6.0",
+    "readable-stream": "~1.1.10"
   },
   "devDependencies": {
     "mocha": "~1.9.0"
