@@ -106,7 +106,7 @@ OpmlParser.prototype.resumeSaxError = function () {
   }
 };
 
-OpmlParser.prototype.handleError = function (next, e) {
+OpmlParser.prototype.handleError = function (e) {
   this.emit('error', e);
 };
 
