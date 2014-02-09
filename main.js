@@ -147,6 +147,11 @@ OpmlParser.prototype.handleOpenTag = function (node) {
     n['#isoutline'] = true;
     n['@']['#id'] = ++this.counter;
     n['@']['#parentid'] = this.getParentId();
+    if ('category' in n['@']) n['@']['categories'] = this.getCategories(n['@']);
+    if ('xmlurl' in n['@'] || n['@']['type'] === 'rss') { // a feed is found
+      n['@']['#type'] = 'feed';
+      n['@']['folder'] = this.getFolderName(this.stack[0]);
+    }
   }
   this.stack.unshift(n);
 };
@@ -187,13 +192,8 @@ OpmlParser.prototype.handleCloseTag = function (el) {
     if (!baseurl && this.xmlbase && this.xmlbase.length) { // handleMeta was able to infer a baseurl without xml:base or options.feedurl
       n = utils.reresolve(n, this.xmlbase[0]['#']);
     }
-    // Reassign attributes to properties of the outline object
-    n = n['@'];
-    if ('category' in n) n['categories'] = this.getCategories(n);
-    if ('xmlurl' in n || n.type === 'rss') { // a feed is found
-      n.folder = this.getFolderName(this.stack[0]);
-    }
-    this.push(n);
+    // All the information in a outline element is in the attributes.
+    this.push(n['@']);
   } else if ((n['#name'] === 'head' ||
             (n['#local'] === 'head' && n['#type'] === 'opml')) &&
             !this.meta.title) { // We haven't yet parsed all the metadata
