@@ -206,19 +206,14 @@ OpmlParser.prototype.handleCloseTag = function (el) {
     if (!baseurl && this.xmlbase && this.xmlbase.length) { // handleMeta was able to infer a baseurl without xml:base or options.feedurl
       n = utils.reresolve(n, this.xmlbase[0]['#']);
     }
-    // These three lines reassign attributes to properties of the outline object and
-    // preserve child outlines
-    var children = n.outline;
+    // Reassign attributes to properties of the outline object
     n = n['@'];
     if ('category' in n) n['categories'] = this.getCategories(n);
-    if (children) n.outline = children;
-
-    if ('xmlurl' in n) { // a feed is found
+    if ('xmlurl' in n || n.type === 'rss') { // a feed is found
       n.folder = this.getFolderName(this.stack[0]);
-      if (this.options.addmeta) {
-        n.meta = this.meta;
-      }
-      this.emit('feed', n);
+    }
+    if (this.options.addmeta) {
+      n.meta = this.meta;
     }
     this.push(n);
   } else if ((node['#name'] === 'head' ||
