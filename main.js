@@ -59,6 +59,7 @@ OpmlParser.prototype.init = function (){
   this.stack = [];
   this.xmlbase = [];
   this.errors = [];
+  this.counter = 0;
 };
 
 /*
@@ -81,7 +82,7 @@ OpmlParser.prototype.parseOpts = function (options) {
 OpmlParser.prototype.handleEnd = function () {
   // We made it to the end without throwing, but let's make sure we were actually
   // parsing a feed
-  if (this.meta && !this.meta['#type']) {
+  if (!(this.meta && this.meta['#type'] === 'opml')) {
     var e = new Error('Not an outline');
     return this.handleError(e);
   }
@@ -116,86 +117,73 @@ OpmlParser.prototype.handleProcessingInstruction = function (node) {
 };
 
 OpmlParser.prototype.handleOpenTag = function (node) {
-  var n = {};
-  n['#name'] = node.name; // Avoid namespace collissions later...
-  n['#prefix'] = node.prefix; // The current ns prefix
-  n['#local'] = node.local; // The current element name, sans prefix
-  n['#uri'] = node.uri; // The current ns uri
-  n['@'] = {};
-  n['#'] = '';
+  // First, update the current xml:base so that URI resolutions are correct
+  this.joinXmlBase(node);
 
-  if (Object.keys(node.attributes).length) {
-    n['@'] = this.handleAttributes(node.attributes, n['#name']);
-  }
+  var n = {
+    '#name': node.name, // Avoid namespace collissions later...
+    '#prefix': node.prefix, // The current ns prefix
+    '#local': node.local, // The current element name, sans prefix
+    '#uri': node.uri, // The current ns uri
+    '#type': utils.nslookup(node.uri, 'opml') || utils.nslookup(node.uri, undefined) ? 'opml' : null, // make it easier to check if this is a standard opml node
+    '@': this.handleAttributes(node),
+    '#': ''
+  };
 
+  // Handle root node
   if (this.stack.length === 0 &&
-     (n['#name'] === 'opml' || (n['#local'] === 'opml' && utils.nslookup([n['#uri']], 'opml')))) {
-    this.meta['#ns'] = [];
-    this.meta['@'] = [];
-    Object.keys(n['@']).forEach(function(name) {
-      var o = {};
-      o[name] = n['@'][name];
+     (n['#name'] === 'opml' || (n['#local'] === 'opml' && n['#type'] === 'opml'))) {
+    this.meta['#type'] = 'opml';
+    this.meta['#ns'] = {};
+    this.meta['@'] = {};
+    Object.keys(n['@']).forEach(function (name) {
       if (name.indexOf('xmlns') === 0) {
-        this.meta['#ns'].push(o);
-      } else if (name != 'version') {
-        this.meta['@'].push(o);
+        this.meta['#ns'][name] = n['@'][name];
+      } else if (name !== 'version') {
+        this.meta['@'][name] = n['@'][name];
       }
     }, this);
     this.meta['#version'] = n['@']['version'] || '1.1';
+  }
+  // Track the outline count so we can later walk the tree
+  if (n['#name'] === 'outline' || (n['#local'] === 'outline' && n['#type'] === 'opml')) {
+    n['#isoutline'] = true;
+    n['@']['#id'] = ++this.counter;
+    n['@']['#parentid'] = this.getParentId();
   }
   this.stack.unshift(n);
 };
 
 OpmlParser.prototype.handleCloseTag = function (el) {
-  var node = { '#name' : el
-             , '#prefix' : ''
-             , '#local' : '' }
-    , stdEl
-    , item
+  var n = this.stack.shift()
     , baseurl
-    ;
-  var n = this.stack.shift();
-  el = el.split(':');
-
-  if (el.length > 1 && el[0] === n['#prefix']) {
-    if (utils.nslookup(n['#uri'], 'opml')) {
-      node['#prefix'] = el[0];
-      node['#local'] = el.slice(1).join(':');
-      node['#type'] = 'opml';
-    } else {
-      node['#prefix'] = utils.nsprefix(n['#uri']) || n['#prefix'];
-      node['#local'] = el.slice(1).join(':');
-    }
-  } else {
-    node['#local'] = node['#name'];
-    node['#type'] = utils.nsprefix(n['#uri']) || n['#prefix'];
-  }
-  delete n['#name'];
-  delete n['#local'];
-  delete n['#prefix'];
-  delete n['#uri'];
+    , stdEl;
 
   if (this.xmlbase && this.xmlbase.length) {
     baseurl = this.xmlbase[0]['#'];
+    if (n['#name'] === this.xmlbase[0]['#name']) {
+      void this.xmlbase.shift();
+    }
   }
 
-  if (this.xmlbase.length && (el == this.xmlbase[0]['#name'])) {
-    void this.xmlbase.shift();
-  }
-
+  // Normalize the text node
   if ('#' in n) {
     if (n['#'].match(/^\s*$/)) {
       // Delete text nodes with nothing by whitespace
       delete n['#'];
     } else {
       n['#'] = n['#'].trim();
-      if (Object.keys(n).length === 1 && node['#name'] != 'outline') {
+      // If this is a bare text node with no attributes, set the property value
+      // as the value of the text node, unless it's an outline element
+      if (!n['#isoutline'] && Object.keys(n).filter(function (key) { return key !== '@' || !Object.keys(n[key]).length; }).length === 1) {
         n = n['#'];
+        // I'm through with this guy...
+        return;
       }
     }
   }
 
-  if (node['#name'] === 'outline') { // We have an outline node
+  if (n['#isoutline']) { // We have an outline node
     if (!this.meta.title) { // We haven't yet parsed all the metadata
       utils.merge(this.meta, this.handleMeta(this.stack[1].head), true);
       if (!this._emitted_meta) {
@@ -216,8 +204,8 @@ OpmlParser.prototype.handleCloseTag = function (el) {
       n.meta = this.meta;
     }
     this.push(n);
-  } else if ((node['#name'] === 'head' ||
-            (node['#local'] === 'head' && (node['#prefix'] === '' || node['#type'] === 'opml'))) &&
+  } else if ((n['#name'] === 'head' ||
+            (n['#local'] === 'head' && n['#type'] === 'opml')) &&
             !this.meta.title) { // We haven't yet parsed all the metadata
     utils.merge(this.meta, this.handleMeta(n), true);
     if (!this._emitted_meta) {
@@ -227,12 +215,12 @@ OpmlParser.prototype.handleCloseTag = function (el) {
   }
 
   if (this.stack.length > 0) {
-    if (node['#prefix'] && node['#local'] && !node['#type']) {
-      stdEl = node['#prefix'] + ':' + node['#local'];
-    } else if (node['#name'] && node['#type'] && node['#type'] !== this.meta['#type']) {
-      stdEl = node['#name'];
+    if (n['#prefix'] && n['#local'] && !n['#type']) {
+      stdEl = n['#prefix'] + ':' + n['#local'];
+    } else if (n['#name'] && n['#type'] && n['#type'] !== this.meta['#type']) {
+      stdEl = n['#name'];
     } else {
-      stdEl = node['#local'] || node['#name'];
+      stdEl = n['#local'] || n['#name'];
     }
     if (!this.stack[0].hasOwnProperty(stdEl)) {
       this.stack[0][stdEl] = n;
@@ -254,20 +242,30 @@ OpmlParser.prototype.handleText = function (text) {
   }
 };
 
-OpmlParser.prototype.handleAttributes = function (attrs, el) {
-  Object.keys(attrs).forEach(function(name){
-    if (this.xmlbase.length && (name == 'href' || name == 'src')) {
-      // Apply xml:base to these elements as they appear
-      // rather than leaving it to the ultimate parser
-      attrs[name] = utils.resolve(this.xmlbase[0]['#'], attrs[name]);
-    } else if (name == 'xml:base') {
-      if (this.xmlbase.length) {
-        attrs[name] = utils.resolve(this.xmlbase[0]['#'], attrs[name]);
-      }
-      this.xmlbase.unshift({ '#name': el, '#': attrs[name]});
+OpmlParser.prototype.joinXmlBase = function (node) {
+  if ('xml:base' in node.attributes) {
+    if (this.xmlbase.length) {
+      node.attributes['xml:base'] = utils.resolve(this.xmlbase[0]['#'], node.attributes['xml:base'].trim());
     }
-    attrs[name] = attrs[name] ? attrs[name].trim() : '';
-  }, this);
+    this.xmlbase.unshift({ '#name': node.name, '#': node.attributes['xml:base']});
+  }
+};
+
+OpmlParser.prototype.handleAttributes = function (node) {
+  var attrs = {}
+    , names = Object.keys(node.attributes);
+  if (names.length) {
+    names.forEach(function (name) {
+      if (this.xmlbase.length && (name === 'href' || name === 'src')) {
+        // Apply xml:base to these elements as they appear
+        // rather than leaving it to the ultimate parser
+        attrs[name] = node.attributes[name] ? utils.resolve(this.xmlbase[0]['#'], node.attributes[name].trim()) : '';
+      }
+      else {
+        attrs[name] = node.attributes[name] ? node.attributes[name].trim() : '';
+      }
+    }, this);
+  }
   return attrs;
 };
 
@@ -306,6 +304,13 @@ OpmlParser.prototype.handleMeta = function (node) {
     if (name.indexOf('#') !== 0 && ~name.indexOf(':')) meta[name] = el;
   });
   return meta;
+};
+
+OpmlParser.prototype.getParentId = function () {
+  var parent = this.stack.length && this.stack[0];
+  return ((parent && (parent['#name'] === 'outline' || (parent['#local'] === 'outline' && utils.nslookup([parent['#uri']], 'opml')))) ?
+          parent['@']['#id'] :
+          0);
 };
 
 OpmlParser.prototype.getFolderName = function (node) {
