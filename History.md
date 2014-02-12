@@ -1,4 +1,25 @@
 
+v0.6.0 / 2014-02-12
+==================
+
+ * Merge branch 'streams2'
+ * Update basic tests.
+ * Add tree structure example.
+ * Update simple example.
+ * Update readme.
+ * Update dump script to also dump meta.
+ * Remove old debug script.
+ * Move category and folder parsing to where the rest of the parsing is.
+ * Remove normalize option.
+ * Don't emit meta or add meta to data.
+ * Update package dependencies
+ * Refactor to add outline node ids and parent ids and eliminate unneeded object creation.
+ * Don't try to nest children since we're streaming now. Also include meta (unless turned off in options) with all outline elements.
+ * Remove unneeded dependencies.
+ * Fix params in handleError method.
+ * Update supporting files for streams2.
+ * First pass porting streams2 changes to main module.
+
 v0.5.0 / 2013-04-06
 ==================
 
