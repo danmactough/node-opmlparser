@@ -1,21 +1,22 @@
 #!/usr/bin/env node
 /*
- * Parse a feed and dump the result to the console
+ * Parse an outline and dump the result to the console
  *
- * Usage: node dump.js <feed url or filename>
+ * Usage: curl <outline url> | bin/dump.js
+ *        cat <outline file> | bin/dump.js
  *
  */
 var util = require('util')
-  , OpmlParser = require('../')
-  , file = process.argv[2];
+  , OpmlParser = require('../');
 
-if (!file) {
-  process.exit(2);
-}
-
-var opmlparser = new OpmlParser();
-opmlparser.parseFile(file)
+process.stdin.pipe(new OpmlParser())
   .on('error', console.error)
-  .on('complete', function(){
-    console.log(util.inspect(arguments, null, 10, true));
+  .on('readable', function() {
+    var stream = this, outline;
+    while (outline = stream.read()) {
+      console.log(util.inspect(outline, null, 10, true));
+    }
+  })
+  .on('end', function () {
+    console.log(util.inspect(this.meta, null, 10, true));
   });
