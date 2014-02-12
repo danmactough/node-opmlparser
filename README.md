@@ -1,4 +1,4 @@
-[![Build Status](https://secure.travis-ci.org/danmactough/node-opmlparser.png?branch=refactor)](https://travis-ci.org/danmactough/node-opmlparser)
+[![Build Status](https://secure.travis-ci.org/danmactough/node-opmlparser.png?branch=v0.5)](https://travis-ci.org/danmactough/node-opmlparser)
 #  Opmlparser - OPML parsing in Node.js
 
 This module adds methods for OPML parsing in node.js using Isaac Schlueter's [sax](https://github.com/isaacs/sax-js) parser.
