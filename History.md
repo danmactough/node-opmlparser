@@ -1,4 +1,10 @@
 
+v0.5.1 / 2014-02-12
+==================
+
+ * Fix branch config in travis image in readme.
+ * Update npm publish tags.
+
 v0.5.0 / 2013-04-06
 ==================
 
