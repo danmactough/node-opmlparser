@@ -29,6 +29,9 @@
   "devDependencies": {
     "mocha": "~1.9.0"
   },
+  "publishConfig": {
+    "tag": "0.5"
+  },
   "scripts": {
     "test": "make test"
   }
