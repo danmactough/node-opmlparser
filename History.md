@@ -1,4 +1,11 @@
 
+v0.7.0 / 2014-08-01
+==================
+
+ * Fix type error: safer deep object properties to guard against malformed input. Resolves #4
+ * Add failing test case for #4
+ * Always use readable-stream package for stability and updates.
+
 v0.6.0 / 2014-02-12
 ==================
 
