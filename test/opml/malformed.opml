@@ -1,0 +1,19 @@
+.org/"/>
+        <outline type="rss" text="The CSS Ninja" title="The CSS Ninja" xmlUrl="http://www.thecssninja.com/feed" htmlUrl="http://www.thecssninja.com"/>
+        <outline type="rss" text="Tympanus Codrops" title="Tympanus Codrops" xmlUrl="http://feeds2.feedburner.com/tympanus" htmlUrl="http://tympanus.net/codrops"/>
+        <outline type="rss" text="CSS-Tricks" title="CSS-Tricks" xmlUrl="http://feeds.feedburner.com/CssTricks" htmlUrl="http://css-tricks.com"/>
+        <outline type="rss" text="Ajaxian » Front Page" title="Ajaxian » Front Page" xmlUrl="http://feeds.feedburner.com/ajaxian" htmlUrl="http://ajaxian.com"/>
+        <outline type="rss" text="DesignM.ag" title="DesignM.ag" xmlUrl="http://feeds2.feedburner.com/designmag" htmlUrl="http://designm.ag"/>
+        <outline type="rss" text="Hakim.se" title="Hakim.se" xmlUrl="http://hakim.se/rss.xml" htmlUrl="http://hakim.se/"/>
+        <outline type="rss" text="Icon Deposit's Latest Posts" title="Icon Deposit's Latest Posts" xmlUrl="http://feeds.feedburner.com/TheIconDeposit-NewForumPosts" htmlUrl="http://www.icondeposit.com"/>
+        <outline type="rss" text="SitePoint" title="SitePoint" xmlUrl="http://feeds.feedburner.com/SitepointFeed" htmlUrl="http://www.sitepoint.com"/>
+        <outline type="rss" text="DailyJS" tit
+        <outline type="rss" text="Web Designer Wall - Design Trends and Tutorials" title="Web Designer Wall - Design Trends and Tutorials" xmlUrl="http://feeds2.feedburner.com/WebDesignerWall" htmlUrl="http://webdesignerwall.com"/>
+        <outline type="rss" text="Nodebits" title="Nodebits" xmlUrl="http://nodebits.org/feed.xml"/>
+        <outline type="rss" text="1stwebdesigner - Graphic and Web Design Blog" title="1stwebdesigner - Graphic and Web Design Blog" xmlUrl="http://feeds.feedburner.com/1stwebdesigner" htmlUrl="http://www.1stwebdesigner.com"/>
+        <outline type="rss" text="Blog Feed" title="Blog Feed" xmlUrl="http://feeds.developer.yahoo.net/YDNBlog" htmlUrl="https://developer.yahoo.com/blogs/ydn/rssfeed/"/>
+        <outline type="rss" texb Design and Development Blog" title="Design Woop | The Web Design and Development Blog" xmlUrl="http://feeds.feedburner.com/designwoop" htmlUrl="http://designwoop.com"/>
+        <outline type="rss" text="InsertHTML" title="InsertHTML" xmlUrl="http://feeds.feedburner.com/inserthtml" htmlUrl="http://www.inserthtml.com"/>
+        <outline type="rss" text="Webdesigntuts+" title="Webdesigntuts+" xmlUrl="http://feeds.feedburner.com/webdesigntutsplus" htmlUrl="http://webdesign.tutsplus.com"/>
+    </body>
+</opml>
