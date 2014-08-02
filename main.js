@@ -182,7 +182,7 @@ OpmlParser.prototype.handleCloseTag = function (el) {
   }
 
   if (n['#isoutline']) { // We have an outline node
-    if (!this.meta.title) { // We haven't yet parsed all the metadata
+    if (!this.meta.title && this.stack[1] && this.stack[1].head) { // We haven't yet parsed all the metadata
       utils.merge(this.meta, this.handleMeta(this.stack[1].head), true);
     }
     if (!baseurl && this.xmlbase && this.xmlbase.length) { // handleMeta was able to infer a baseurl without xml:base or options.feedurl
