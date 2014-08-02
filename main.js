@@ -11,13 +11,9 @@
  */
 var sax = require('sax')
   , util = require('util')
-  , TransformStream = require('stream').Transform
+  , TransformStream = require('readable-stream').Transform
   , utils = require('./utils')
   ;
-
-if (TransformStream === undefined) {
-  TransformStream = require('readable-stream').Transform;
-}
 
 /**
  * OpmlParser constructor. Most apps will only use one instance.
