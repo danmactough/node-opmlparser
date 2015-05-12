@@ -283,7 +283,15 @@ OpmlParser.prototype.handleMeta = function (node) {
       break;
     }
     // Fill with all native other namespaced properties
-    if (name.indexOf('#') !== 0 && ~name.indexOf(':')) meta[name] = el;
+    if (name.indexOf('#') !== 0) {
+      if (~name.indexOf(':')) meta[name] = el;
+      else if (!(name in meta)) {
+        // allow arbitrary elements in head and assume the #text is the value
+        meta[name] = utils.get(el);
+      }
+    }
+
+    // if (name.indexOf('#') !== 0 && ~name.indexOf(':')) meta[name] = el;
   });
   return meta;
 };
