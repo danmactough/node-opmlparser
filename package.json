@@ -23,12 +23,12 @@
     "node": ">= 0.8.0"
   },
   "dependencies": {
-    "sax": "~0.6.0",
-    "readable-stream": "~1.1.10"
+    "sax": "~1.2.1",
+    "readable-stream": "~2.2.2"
   },
   "devDependencies": {
-    "mocha": "~1.9.0",
-    "request": "~2.33.0"
+    "mocha": "~3.2.0",
+    "request": "~2.79.0"
   },
   "scripts": {
     "test": "make test"
