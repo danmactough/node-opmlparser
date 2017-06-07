@@ -1,6 +1,8 @@
 [![Build Status](https://secure.travis-ci.org/danmactough/node-opmlparser.png?branch=master)](https://travis-ci.org/danmactough/node-opmlparser)
 #  Opmlparser - OPML parsing in Node.js
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/danmactough/node-opmlparser.svg)](https://greenkeeper.io/)
+
 This module adds methods for OPML parsing in node.js using Isaac Schlueter's
 [sax](https://github.com/isaacs/sax-js) parser.
 
